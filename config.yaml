@@ -1,0 +1,17 @@
+### Example Only ### 
+# Paths
+train_protocol_path: "data/ASVspoof2019_LA/protocols/ASVspoof2019.LA.cm.train.trn.txt"
+train_audio_dir: "data/ASVspoof2019_LA/flac"
+eval_protocol_path: "data/ASVspoof2021_DF/protocols/ASVspoof2021.DF.cm.eval.trl.txt"
+eval_audio_dir: "data/ASVspoof2021_DF/flac"
+
+# Model
+pretrained_model: "facebook/wav2vec2-xls-r-300m"
+freeze_backbone: True  # Freeze XLS-R initially?
+
+# Training
+batch_size: 16       # Lower this if you run out of GPU memory
+lr: 0.000001         # Learning rate
+epochs: 50
+seed: 1234
+num_workers: 4       # For data loading
