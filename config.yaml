@@ -1,17 +1,36 @@
-### Example Only ### 
-# Paths
-train_protocol_path: "data/ASVspoof2019_LA/protocols/ASVspoof2019.LA.cm.train.trn.txt"
-train_audio_dir: "data/ASVspoof2019_LA/flac"
-eval_protocol_path: "data/ASVspoof2021_DF/protocols/ASVspoof2021.DF.cm.eval.trl.txt"
-eval_audio_dir: "data/ASVspoof2021_DF/flac"
+model:
+  pretrained_name: "facebook/wav2vec2-xls-r-300m"
+  freeze_backbone: true
+  num_layers: 24
+  hidden_dim: 1024
+  num_classes: 2
 
-# Model
-pretrained_model: "facebook/wav2vec2-xls-r-300m"
-freeze_backbone: True  # Freeze XLS-R initially?
+data:
+  train_protocol_path: "data/ASVspoof2019_LA/protocols/ASVspoof2019.LA.cm.train.trn.txt"
+  train_audio_dir: "data/ASVspoof2019_LA/flac"
+  eval_protocol_path: "data/ASVspoof2021_DF/protocols/ASVspoof2021.DF.cm.eval.trl.txt"
+  eval_audio_dir: "data/ASVspoof2021_DF/flac"
+  sample_rate: 16000
+  segment_samples: 64600
+  augment: true
 
-# Training
-batch_size: 16       # Lower this if you run out of GPU memory
-lr: 0.000001         # Learning rate
-epochs: 50
-seed: 1234
-num_workers: 4       # For data loading
+train:
+  batch_size: 5
+  lr: 0.000001
+  weight_decay: 0.0001
+  epochs: 50
+  early_stop_patience: 3
+  seed: 1234
+  num_workers: 4
+  precision: "16-mixed"
+  grad_clip: 1.0
+
+eval:
+  metrics: ["eer"]
+  save_scores_path: null
+
+logging:
+  backend: "tensorboard"
+  run_dir: "runs"
+  project: "audio-deepfake"
+  log_every_n_steps: 20
