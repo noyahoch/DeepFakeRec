@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -39,6 +39,8 @@ class TrainConfig:
     num_workers: int = 4
     precision: str = "16-mixed"
     grad_clip: float | None = 1.0
+    loss_weights: list[float] = field(default_factory=lambda: [0.1, 0.9])
+    checkpoint_dir: str = "checkpoints"
 
 
 @dataclass

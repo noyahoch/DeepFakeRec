@@ -1,3 +1,4 @@
+"""Evaluation / inference script."""
 from __future__ import annotations
 
 import numpy as np
@@ -34,7 +35,9 @@ def load_checkpoint(cfg: RunConfig, ckpt_path: str) -> DeepfakeDetector:
 
 @torch.no_grad()
 def evaluate(cfg: RunConfig, ckpt_path: str) -> dict[str, float]:
-    model = load_checkpoint(cfg, ckpt_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = load_checkpoint(cfg, ckpt_path).to(device)
+
     dataset = AudioDataset(
         protocol_path=cfg.data.eval_protocol_path,
         audio_dir=cfg.data.eval_audio_dir,
@@ -52,7 +55,7 @@ def evaluate(cfg: RunConfig, ckpt_path: str) -> dict[str, float]:
     all_probs = []
     all_labels = []
     for batch in loader:
-        wav = batch["wav"]
+        wav = batch["wav"].to(device)
         labels = batch["label"]
         logits = model(wav)
         probs = torch.softmax(logits, dim=-1)[:, 1]
@@ -62,4 +65,11 @@ def evaluate(cfg: RunConfig, ckpt_path: str) -> dict[str, float]:
     y_score = np.concatenate(all_probs)
     y_true = np.concatenate(all_labels)
     metrics = compute_metrics(y_true.astype(np.int32), y_score.astype(np.float32))
+
+    if cfg.eval.save_scores_path:
+        with open(cfg.eval.save_scores_path, "w") as f:
+            for s in y_score:
+                f.write(f"{s}\n")
+        print(f"Scores saved to {cfg.eval.save_scores_path}")
+
     return {"eer": metrics.eer}
