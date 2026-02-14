@@ -6,10 +6,10 @@ model:
   num_classes: 2
 
 data:
-  train_protocol_path: "data/ASVspoof2019_LA/protocols/ASVspoof2019.LA.cm.train.trn.txt"
-  train_audio_dir: "data/ASVspoof2019_LA/flac"
-  eval_protocol_path: "data/ASVspoof2021_DF/protocols/ASVspoof2021.DF.cm.eval.trl.txt"
-  eval_audio_dir: "data/ASVspoof2021_DF/flac"
+  train_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.train.trn.txt"
+  train_audio_dir: "data/LA_2019/ASVspoof2019_LA_train/flac"
+  eval_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt" # TODO: change to newer eval
+  eval_audio_dir: "data/LA_2019/ASVspoof2019_LA_eval/flac" # TODO: change to newer eval
   sample_rate: 16000
   segment_samples: 64600
   augment: true
@@ -25,8 +25,8 @@ train:
   precision: "16-mixed"
   grad_clip: 1.0
   loss_weights:
-    neg: 0.1  # bonafide (class 0)
-    pos: 0.9  # spoof (class 1)
+    - 0.1  # bonafide (class 0)
+    - 0.9  # spoof (class 1)
   checkpoint_dir: "checkpoints"
 
 eval:

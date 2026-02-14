@@ -6,27 +6,29 @@ Uses PyTorch Lightning with:
   - W&B logging
   - Early stopping + best-model checkpointing
 """
+
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
-from torch import nn
-from torch.nn import functional as F
 from lightning import LightningModule, Trainer
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
+from torch import nn
+from torch.nn import functional as F
 
 from .config import RunConfig, seed_everything
 from .dataset import AudioDataModule
 from .metrics import compute_metrics
 from .model import DeepfakeDetector, SlsClassifier, XlsrBackbone
 
-
 # ---------------------------------------------------------------------------
 # Lightning Module
 # ---------------------------------------------------------------------------
+
 
 class DeepfakeLitModule(LightningModule):
     def __init__(
@@ -49,7 +51,9 @@ class DeepfakeLitModule(LightningModule):
         self._val_outputs: list[dict[str, torch.Tensor]] = []
 
     # -- forward --
-    def forward(self, wav: torch.Tensor, attention_mask: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(
+        self, wav: torch.Tensor, attention_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
         return self.model(wav, attention_mask=attention_mask)
 
     # -- shared step --
@@ -97,6 +101,7 @@ class DeepfakeLitModule(LightningModule):
 # Builders
 # ---------------------------------------------------------------------------
 
+
 def build_model(cfg: RunConfig) -> DeepfakeDetector:
     backbone = XlsrBackbone(
         model_name=cfg.model.pretrained_name,
@@ -126,11 +131,30 @@ def build_datamodule(cfg: RunConfig) -> AudioDataModule:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _run_path(base: str, run_name: str | None) -> Path:
+    """Return base as Path, or base/run_name if run_name is not None."""
+    path = Path(base)
+    if run_name is not None:
+        path = path / run_name
+    return path
+
+
+# ---------------------------------------------------------------------------
 # Entry-point
 # ---------------------------------------------------------------------------
 
-def train(cfg: RunConfig) -> None:
+
+def train(cfg: RunConfig, run_name: str | None = None) -> None:
     seed_everything(cfg.train.seed)
+
+    run_dir = _run_path(cfg.logging.run_dir, run_name)
+    checkpoint_dir = _run_path(cfg.train.checkpoint_dir, run_name)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(cfg)
     lit = DeepfakeLitModule(
@@ -143,7 +167,8 @@ def train(cfg: RunConfig) -> None:
 
     logger = WandbLogger(
         project=cfg.logging.project,
-        save_dir=cfg.logging.run_dir,
+        save_dir=str(run_dir),
+        name=run_name,
     )
 
     callbacks = [
@@ -153,7 +178,7 @@ def train(cfg: RunConfig) -> None:
             mode="min",
         ),
         ModelCheckpoint(
-            dirpath=cfg.train.checkpoint_dir,
+            dirpath=str(checkpoint_dir),
             filename="best-{epoch}-{val/eer:.4f}",
             monitor="val/eer",
             save_top_k=1,

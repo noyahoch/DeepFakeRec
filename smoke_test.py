@@ -2,20 +2,26 @@
 
 Usage:  uv run python smoke_test.py
 """
+
 import torch
+from lightning import LightningDataModule, Trainer
+from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader, TensorDataset
-from lightning import LightningDataModule
 
 from src.config import load_config
-from src.train import build_model, DeepfakeLitModule, train
-from lightning import Trainer
-from lightning.pytorch.loggers import WandbLogger
+from src.train import DeepfakeLitModule, build_model, train
 
 
 class DummyDataModule(LightningDataModule):
     """Generates random waveforms + binary labels."""
 
-    def __init__(self, n_train: int = 40, n_val: int = 20, segment_samples: int = 64600, batch_size: int = 5):
+    def __init__(
+        self,
+        n_train: int = 40,
+        n_val: int = 20,
+        segment_samples: int = 64600,
+        batch_size: int = 5,
+    ):
         super().__init__()
         self.n_train = n_train
         self.n_val = n_val
@@ -38,10 +44,20 @@ class DummyDataModule(LightningDataModule):
         return {"wav": wavs, "label": labels}
 
     def train_dataloader(self):
-        return DataLoader(self._train, batch_size=self.batch_size, shuffle=True, collate_fn=self._collate)
+        return DataLoader(
+            self._train,
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=self._collate,
+        )
 
     def val_dataloader(self):
-        return DataLoader(self._val, batch_size=self.batch_size, shuffle=False, collate_fn=self._collate)
+        return DataLoader(
+            self._val,
+            batch_size=self.batch_size,
+            shuffle=False,
+            collate_fn=self._collate,
+        )
 
 
 def main():
@@ -60,7 +76,7 @@ def main():
 
     trainer = Trainer(
         max_epochs=3,
-        precision="32-true",       # CPU-friendly, no amp
+        precision="32-true",  # CPU-friendly, no amp
         gradient_clip_val=cfg.train.grad_clip,
         log_every_n_steps=1,
         logger=logger,

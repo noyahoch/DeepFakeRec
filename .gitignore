@@ -1,2 +1,9 @@
 # Virtual Environment
 .venv/
+.vscode/
+data/
+models/
+runs/
+wget-log
+__pycache__/
+checkpoints/

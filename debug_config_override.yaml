@@ -1,0 +1,5 @@
+# Only include keys you want to override; they are deep-merged over the main config yaml
+
+train:
+  num_workers: 0
+

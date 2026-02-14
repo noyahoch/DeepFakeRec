@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, TypedDict
 
+import librosa
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 try:
     from lightning import LightningDataModule
@@ -29,21 +32,45 @@ class ProtocolEntry:
 
 def parse_protocol(path: str) -> list[ProtocolEntry]:
     """
-    Parse dataset protocol file and return a list of entries.
-    Must be implemented to support ASVspoof or In-the-Wild formats.
+    Parse ASVspoof 2019 LA protocol file and return a list of entries.
+
+    Protocol format (space-separated): speaker_id file_id - - key
+    where key is "bonafide" (label 0) or "spoof" (label 1).
+    Returns entries with audio_path = file_id + ".flac" (relative to audio_dir).
     """
-    # TODO(partner): implement protocol parsing for ASVspoof 2019 LA / ASVspoof 2021 DF
-    # Expected: return ProtocolEntry(audio_path=..., label=0/1, meta={...})
-    raise NotImplementedError("parse_protocol is dataset-specific and must be implemented.")
+    entries: list[ProtocolEntry] = []
+    protocol_path = Path(path)
+    if not protocol_path.exists():
+        raise FileNotFoundError(f"Protocol file not found: {path}")
+
+    with open(protocol_path, encoding="utf-8") as f:
+        for line in f.readlines():
+            if not line:
+                continue
+            speaker_id, file_id, _, _, key = line.split()
+            if not key.lower() in ("bonafide", "spoof"):
+                raise ValueError(f"Invalid key: {key}, must be 'bonafide' or 'spoof'")
+            label = 0 if key.lower() == "bonafide" else 1
+            audio_path = f"{file_id}.flac"
+            entries.append(
+                ProtocolEntry(
+                    audio_path=audio_path,
+                    label=label,
+                    meta={"speaker_id": speaker_id, "file_id": file_id, "key": key},
+                )
+            )
+    return entries
 
 
 def load_audio(path: str, sample_rate: int) -> torch.Tensor:
     """
-    Load audio file and return waveform tensor (T,).
+    Load audio file and return waveform tensor (T,) as float32.
+    Resamples to sample_rate if needed (e.g. with librosa).
     """
-    # TODO(partner): implement audio loading (librosa or soundfile), resample to sample_rate,
-    # and return torch.float32 tensor of shape (T,)
-    raise NotImplementedError("load_audio must be implemented with librosa/soundfile.")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Audio file not found: {path}")
+    y, _ = librosa.load(path, sr=sample_rate, mono=True, dtype="float32")
+    return torch.from_numpy(y)
 
 
 def crop_or_pad(wav: torch.Tensor, segment_samples: int) -> torch.Tensor:
@@ -77,14 +104,17 @@ class AudioDataset(Dataset[AudioSample]):
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.augment = augment
-        self.rawboost = RawBoostAugment(rawboost_cfg or RawBoostConfig()) if augment else None
+        self.rawboost = (
+            RawBoostAugment(rawboost_cfg or RawBoostConfig()) if augment else None
+        )
 
     def __len__(self) -> int:
         return len(self.protocol)
 
     def __getitem__(self, idx: int) -> AudioSample:
         entry = self.protocol[idx]
-        wav = load_audio(entry.audio_path, self.sample_rate)
+        full_path = os.path.join(self.audio_dir, entry.audio_path)
+        wav = load_audio(full_path, self.sample_rate)
         wav = crop_or_pad(wav, self.segment_samples)
         if self.rawboost is not None:
             wav = self.rawboost(wav)

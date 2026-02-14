@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -72,9 +73,45 @@ def _coalesce_metrics(metrics: list[str] | None) -> list[str]:
     return metrics
 
 
-def load_config(path: str) -> RunConfig:
-    with open(path, "r", encoding="utf-8") as f:
+def _resolve_path(p: str, base_dir: Path) -> str:
+    """Resolve path relative to base_dir if not absolute."""
+    path = Path(p)
+    return str(
+        (base_dir / path).resolve() if not path.is_absolute() else path.resolve()
+    )
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge override into base. Override values take precedence. Returns new dict."""
+    out: dict[str, Any] = dict(base)
+    for key, value in override.items():
+        if key in out and isinstance(out[key], dict) and isinstance(value, dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def _apply_override(raw: dict[str, Any], override_path: str) -> dict[str, Any]:
+    """Load override YAML and return a new config dict with it deep-merged in."""
+    override_file = Path(override_path).resolve()
+    if not override_file.is_file():
+        raise FileNotFoundError(f"Override config not found: {override_path}")
+    with open(override_file, "r", encoding="utf-8") as f:
+        over = yaml.safe_load(f) or {}
+    return _deep_merge(raw, over)
+
+
+def load_config(path: str, override_path: str | None = None) -> RunConfig:
+    config_path = Path(path).resolve()
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    with open(config_path, "r", encoding="utf-8") as f:
         raw: dict[str, Any] = yaml.safe_load(f)
+
+    if override_path:
+        raw = _apply_override(raw, override_path)
 
     model = ModelConfig(**raw.get("model", {}))
     data = DataConfig(**raw["data"])
@@ -83,7 +120,9 @@ def load_config(path: str) -> RunConfig:
     eval_cfg.metrics = _coalesce_metrics(eval_cfg.metrics)
     logging = LoggingConfig(**raw.get("logging", {}))
 
-    return RunConfig(model=model, data=data, train=train, eval=eval_cfg, logging=logging)
+    return RunConfig(
+        model=model, data=data, train=train, eval=eval_cfg, logging=logging
+    )
 
 
 def seed_everything(seed: int) -> None:
