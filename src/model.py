@@ -52,7 +52,9 @@ class XlsrBackbone(nn.Module):
 
 
 class SlsClassifier(nn.Module):
-    def __init__(self, num_layers: int = 24, hidden_dim: int = 1024, num_classes: int = 2):
+    def __init__(
+        self, num_layers: int = 24, hidden_dim: int = 1024, num_classes: int = 2
+    ):
         super().__init__()
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
@@ -125,7 +127,9 @@ def _smoke_test_classifier() -> None:
     with torch.no_grad():
         logits = classifier(H)
     if logits.shape != (2, 2):
-        raise AssertionError(f"Unexpected classifier output shape: {tuple(logits.shape)}")
+        raise AssertionError(
+            f"Unexpected classifier output shape: {tuple(logits.shape)}"
+        )
     print(f"Classifier output shape: {tuple(logits.shape)}")
 
 

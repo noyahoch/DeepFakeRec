@@ -36,6 +36,7 @@ class TrainConfig:
     weight_decay: float = 1e-4
     epochs: int = 50
     early_stop_patience: int = 3
+    val_every_n_epochs: int = 1
     seed: int = 1234
     num_workers: int = 4
     precision: str = "16-mixed"

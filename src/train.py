@@ -190,6 +190,7 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
         max_epochs=cfg.train.epochs,
         precision=cfg.train.precision,
         gradient_clip_val=cfg.train.grad_clip,
+        check_val_every_n_epoch=cfg.train.val_every_n_epochs,
         log_every_n_steps=cfg.logging.log_every_n_steps,
         logger=logger,
         callbacks=callbacks,

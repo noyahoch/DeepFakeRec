@@ -50,7 +50,7 @@ def parse_protocol(path: str) -> list[ProtocolEntry]:
             speaker_id, file_id, _, _, key = line.split()
             if not key.lower() in ("bonafide", "spoof"):
                 raise ValueError(f"Invalid key: {key}, must be 'bonafide' or 'spoof'")
-            label = 0 if key.lower() == "bonafide" else 1
+            label = 1 if key.lower() == "bonafide" else 0
             audio_path = f"{file_id}.flac"
             entries.append(
                 ProtocolEntry(

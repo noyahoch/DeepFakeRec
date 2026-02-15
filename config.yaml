@@ -20,13 +20,14 @@ train:
   weight_decay: 0.0001
   epochs: 50
   early_stop_patience: 3
+  val_every_n_epochs: 3
   seed: 1234
   num_workers: 4
   precision: "16-mixed"
   grad_clip: 1.0
   loss_weights:
-    - 0.1  # bonafide (class 0)
-    - 0.9  # spoof (class 1)
+    - 0.1  # spoof (class 0)
+    - 0.9  # bonafide (class 1)
   checkpoint_dir: "checkpoints"
 
 eval:
