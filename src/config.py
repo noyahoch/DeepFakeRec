@@ -42,7 +42,11 @@ class TrainConfig:
     precision: str = "16-mixed"
     grad_clip: float | None = 1.0
     loss_weights: list[float] = field(default_factory=lambda: [0.1, 0.9])
-    checkpoint_dir: str = "checkpoints"
+    checkpoint_save_dir: str = "checkpoints"
+    checkpoint_path: str | None = None  # path to .ckpt to resume or run eval-only
+    eval_only: bool = (
+        False  # if True, only run validation, no training, no checkpoint saving
+    )
 
 
 @dataclass

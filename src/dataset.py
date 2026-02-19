@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TypedDict
 
 import librosa
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
+
+try:
+    import soundfile as sf
+except ImportError:
+    sf = None  # type: ignore[assignment]
+try:
+    import torchaudio  # type: ignore[import-untyped]
+except ImportError:
+    torchaudio = None  # type: ignore[assignment]
 
 try:
     from lightning import LightningDataModule
@@ -32,11 +43,16 @@ class ProtocolEntry:
 
 def parse_protocol(path: str) -> list[ProtocolEntry]:
     """
-    Parse ASVspoof 2019 LA protocol file and return a list of entries.
+    Parse ASVspoof LA protocol file and return a list of entries.
 
-    Protocol format (space-separated): speaker_id file_id - - key
-    where key is "bonafide" (label 0) or "spoof" (label 1).
-    Returns entries with audio_path = file_id + ".flac" (relative to audio_dir).
+    Supports two formats (both space-separated):
+    - ASVspoof 2019 style: speaker_id file_id - [attack_id] key
+      e.g. LA_0039 LA_E_2834763 - A11 spoof
+    - ASVspoof 2021 style: speaker_id file_id codec ... attack_id key notrim subset
+      e.g. LA_0009 LA_E_9332881 alaw ita_tx A07 spoof notrim eval
+
+    In both, the second column is file_id and one column is "bonafide" or "spoof".
+    Label: bonafide -> 1, spoof -> 0. audio_path = file_id + ".flac".
     """
     entries: list[ProtocolEntry] = []
     protocol_path = Path(path)
@@ -45,11 +61,23 @@ def parse_protocol(path: str) -> list[ProtocolEntry]:
 
     with open(protocol_path, encoding="utf-8") as f:
         for line in f.readlines():
+            line = line.strip()
             if not line:
                 continue
-            speaker_id, file_id, _, _, key = line.split()
-            if not key.lower() in ("bonafide", "spoof"):
-                raise ValueError(f"Invalid key: {key}, must be 'bonafide' or 'spoof'")
+            tokens = line.split()
+            if len(tokens) < 2:
+                raise ValueError(f"Protocol line has too few columns: {line!r}")
+            speaker_id, file_id = tokens[0], tokens[1]
+            # Find the column that is "bonafide" or "spoof" (supports both formats)
+            key = None
+            for t in tokens:
+                if t.lower() in ("bonafide", "spoof"):
+                    key = t
+                    break
+            if key is None:
+                raise ValueError(
+                    f"No 'bonafide' or 'spoof' label in protocol line: {line!r}"
+                )
             label = 1 if key.lower() == "bonafide" else 0
             audio_path = f"{file_id}.flac"
             entries.append(
@@ -65,11 +93,49 @@ def parse_protocol(path: str) -> list[ProtocolEntry]:
 def load_audio(path: str, sample_rate: int) -> torch.Tensor:
     """
     Load audio file and return waveform tensor (T,) as float32.
-    Resamples to sample_rate if needed (e.g. with librosa).
+    Resamples to sample_rate if needed. Tries soundfile first (avoids deprecated
+    audioread fallback in librosa), then torchaudio, then librosa.
     """
     if not os.path.isfile(path):
         raise FileNotFoundError(f"Audio file not found: {path}")
-    y, _ = librosa.load(path, sr=sample_rate, mono=True, dtype="float32")
+
+    # 1) Prefer soundfile to avoid librosa's audioread fallback (deprecated)
+    if sf is not None:
+        try:
+            y, sr_native = sf.read(path, dtype="float32")
+            if y.ndim == 2:
+                y = y.mean(axis=1)
+            if sr_native != sample_rate:
+                y = librosa.resample(
+                    y.astype(np.float32),
+                    orig_sr=sr_native,
+                    target_sr=sample_rate,
+                    res_type="kaiser_best",
+                )
+            return torch.from_numpy(y.astype(np.float32))
+        except Exception:
+            pass
+
+    # 2) Torchaudio (supports many codecs, works when soundfile fails e.g. some LA 2021)
+    if torchaudio is not None:
+        try:
+            wav, sr_native = torchaudio.load(path)
+            if wav.shape[0] > 1:
+                wav = wav.mean(dim=0, keepdim=True)
+            if sr_native != sample_rate:
+                resampler = torchaudio.transforms.Resample(
+                    orig_freq=sr_native, new_freq=sample_rate
+                )
+                wav = resampler(wav)
+            return wav.squeeze(0).float()
+        except Exception:
+            pass
+
+    # 3) Librosa (may use deprecated audioread; suppress warning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
+        warnings.simplefilter("ignore", category=FutureWarning)
+        y, _ = librosa.load(path, sr=sample_rate, mono=True, dtype="float32")
     return torch.from_numpy(y)
 
 

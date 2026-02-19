@@ -1,0 +1,5 @@
+# Override config: eval-only with checkpoint (no training, no checkpoint saved)
+
+train:
+  checkpoint_path: "checkpoints/fix_label_parsing_15_2/best-epoch=47-val/eer=0.0635.ckpt"
+  eval_only: true

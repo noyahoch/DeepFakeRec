@@ -61,7 +61,7 @@ class DummyDataModule(LightningDataModule):
 
 
 def main():
-    cfg = load_config("config.yaml")
+    cfg = load_config("run_configs/config.yaml")
 
     model = build_model(cfg)
     lit = DeepfakeLitModule(

@@ -40,7 +40,7 @@ for f in REQUIRED_FILES:
     print(f"     - {f}")
 print(f"   Save them to: {LOCAL_DIR.absolute()}")
 
-print("\n3. After downloading, update config.yaml:")
+print("\n3. After downloading, update run_configs/config.yaml:")
 print(f"   model:")
 print(f"     pretrained_name: \"{LOCAL_DIR}\"  # Use relative or absolute path")
 

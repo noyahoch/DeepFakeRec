@@ -1,4 +1,4 @@
-"""Entry point — run with:  uv run python main.py [--config config.yaml] [--mode train|eval] [--ckpt path]"""
+"""Entry point — run with:  uv run python main.py [--config run_configs/config.yaml] [--mode train|eval] [--ckpt path]"""
 
 import argparse
 
@@ -9,7 +9,7 @@ from src.train import train
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="config.yaml", help="Path to config YAML")
+    parser.add_argument("--config", default="run_configs/config.yaml", help="Path to config YAML")
     parser.add_argument("--mode", choices=["train", "eval"], default="train")
     parser.add_argument("--ckpt", type=str, default=None)
     parser.add_argument(

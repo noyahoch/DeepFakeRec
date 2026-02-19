@@ -152,9 +152,9 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
     seed_everything(cfg.train.seed)
 
     run_dir = _run_path(cfg.logging.run_dir, run_name)
-    checkpoint_dir = _run_path(cfg.train.checkpoint_dir, run_name)
+    checkpoint_save_dir = _run_path(cfg.train.checkpoint_save_dir, run_name)
     run_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_save_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(cfg)
     lit = DeepfakeLitModule(
@@ -171,21 +171,25 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
         name=run_name,
     )
 
-    callbacks = [
+    callbacks: list[Any] = [
         EarlyStopping(
             monitor="train/loss",
             patience=cfg.train.early_stop_patience,
             mode="min",
         ),
-        ModelCheckpoint(
-            dirpath=str(checkpoint_dir),
-            filename="best-{epoch}-{val/eer:.4f}",
-            monitor="val/eer",
-            save_top_k=1,
-            mode="min",
-        ),
     ]
+    if not cfg.train.eval_only:
+        callbacks.append(
+            ModelCheckpoint(
+                dirpath=str(checkpoint_save_dir),
+                filename="best-{epoch}-{val/eer:.4f}",
+                monitor="val/eer",
+                save_top_k=1,
+                mode="min",
+            ),
+        )
 
+    ckpt_path = cfg.train.checkpoint_path if cfg.train.checkpoint_path else None
     trainer = Trainer(
         max_epochs=cfg.train.epochs,
         precision=cfg.train.precision,
@@ -195,4 +199,8 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
         logger=logger,
         callbacks=callbacks,
     )
-    trainer.fit(lit, datamodule=data)
+
+    if cfg.train.eval_only:
+        trainer.validate(lit, datamodule=data, ckpt_path=ckpt_path)
+    else:
+        trainer.fit(lit, datamodule=data, ckpt_path=ckpt_path)
