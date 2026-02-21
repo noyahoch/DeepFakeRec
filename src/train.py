@@ -210,6 +210,7 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
                 filename="best-{epoch}-{val/eer:.4f}",
                 monitor="val/eer",
                 save_top_k=1,
+                save_last=True,
                 mode="min",
             ),
         )

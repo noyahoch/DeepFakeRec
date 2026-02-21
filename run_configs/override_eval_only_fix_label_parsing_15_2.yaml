@@ -1,5 +1,10 @@
 # Override config: eval-only with checkpoint (no training, no checkpoint saved)
 
 train:
-  checkpoint_path: "checkpoints/fix_label_parsing_15_2/best-epoch=47-val/eer=0.0635.ckpt"
+  checkpoint_path: "checkpoints/rawboost_eval19_21_02_26/best-epoch=47-val/eer=0.0621.ckpt"
   eval_only: true
+
+data:
+  eval_protocol_path: "data/LA_2021/keys/LA/CM/trial_metadata.txt"
+  eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
+
