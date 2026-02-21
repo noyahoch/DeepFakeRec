@@ -8,10 +8,10 @@ model:
 data:
   train_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.train.trn.txt"
   train_audio_dir: "data/LA_2019/ASVspoof2019_LA_train/flac"
-  # eval_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt"
-  # eval_audio_dir: "data/LA_2019/ASVspoof2019_LA_eval/flac"
-  eval_protocol_path: "data/LA_2021/keys/LA/CM/trial_metadata.txt"
-  eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
+  eval_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt"
+  eval_audio_dir: "data/LA_2019/ASVspoof2019_LA_eval/flac"
+  # eval_protocol_path: "data/LA_2021/keys/LA/CM/trial_metadata.txt"
+  # eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
   sample_rate: 16000
   segment_samples: 64600
   augment: true
