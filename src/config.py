@@ -8,6 +8,8 @@ import numpy as np
 import torch
 import yaml
 
+from .new_rawboost import SSINoiseConfig
+
 
 @dataclass
 class ModelConfig:
@@ -27,6 +29,7 @@ class DataConfig:
     sample_rate: int = 16000
     segment_samples: int = 64600
     augment: bool = True
+    rawboost: SSINoiseConfig = field(default_factory=SSINoiseConfig)
 
 
 @dataclass
@@ -47,6 +50,9 @@ class TrainConfig:
     eval_only: bool = (
         False  # if True, only run validation, no training, no checkpoint saving
     )
+    log_train_eer: bool = (
+        True  # if True, compute and log EER on training set each epoch
+    )
 
 
 @dataclass
@@ -61,6 +67,7 @@ class LoggingConfig:
     run_dir: str = "runs"
     project: str = "audio-deepfake"
     log_every_n_steps: int = 20
+    use_wandb: bool = True  # if False, wandb is disabled (no logging to W&B)
 
 
 @dataclass
@@ -76,14 +83,6 @@ def _coalesce_metrics(metrics: list[str] | None) -> list[str]:
     if metrics is None:
         return ["eer"]
     return metrics
-
-
-def _resolve_path(p: str, base_dir: Path) -> str:
-    """Resolve path relative to base_dir if not absolute."""
-    path = Path(p)
-    return str(
-        (base_dir / path).resolve() if not path.is_absolute() else path.resolve()
-    )
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -107,6 +106,16 @@ def _apply_override(raw: dict[str, Any], override_path: str) -> dict[str, Any]:
     return _deep_merge(raw, over)
 
 
+def _build_data_config(raw_data: dict[str, Any]) -> DataConfig:
+    """Build DataConfig from the 'data' section of the YAML, including nested rawboost."""
+    data_raw = dict(raw_data)
+    rawboost_overrides = data_raw.pop("rawboost", {})
+    data = DataConfig(**data_raw)
+    rawboost_overrides.setdefault("sample_rate", data.sample_rate)
+    data.rawboost = SSINoiseConfig(**rawboost_overrides)
+    return data
+
+
 def load_config(path: str, override_path: str | None = None) -> RunConfig:
     config_path = Path(path).resolve()
     if not config_path.is_file():
@@ -119,7 +128,7 @@ def load_config(path: str, override_path: str | None = None) -> RunConfig:
         raw = _apply_override(raw, override_path)
 
     model = ModelConfig(**raw.get("model", {}))
-    data = DataConfig(**raw["data"])
+    data = _build_data_config(raw["data"])
     train = TrainConfig(**raw.get("train", {}))
     eval_cfg = EvalConfig(**raw.get("eval", {}))
     eval_cfg.metrics = _coalesce_metrics(eval_cfg.metrics)

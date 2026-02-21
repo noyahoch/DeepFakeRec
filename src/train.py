@@ -9,6 +9,7 @@ Uses PyTorch Lightning with:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -37,11 +38,13 @@ class DeepfakeLitModule(LightningModule):
         lr: float,
         weight_decay: float,
         loss_weights: list[float] | None = None,
+        log_train_eer: bool = True,
     ) -> None:
         super().__init__()
         self.model = model
         self.lr = lr
         self.weight_decay = weight_decay
+        self.log_train_eer = log_train_eer
         self.save_hyperparameters(ignore=["model"])
 
         # Weighted CE – paper uses [0.1, 0.9]
@@ -49,6 +52,7 @@ class DeepfakeLitModule(LightningModule):
         self.criterion = nn.CrossEntropyLoss(weight=w)
 
         self._val_outputs: list[dict[str, torch.Tensor]] = []
+        self._train_outputs: list[dict[str, torch.Tensor]] = []
 
     # -- forward --
     def forward(
@@ -72,9 +76,32 @@ class DeepfakeLitModule(LightningModule):
 
         return {"loss": loss, "probs": probs.detach(), "labels": label.detach()}
 
+    def _log_eer_from_outputs(
+        self,
+        outputs: list[dict[str, torch.Tensor]],
+        metric_key: str,
+    ) -> None:
+        """Concatenate step outputs, compute EER, log it, and clear the list."""
+        if not outputs:
+            return
+        probs = torch.cat([o["probs"] for o in outputs]).cpu().numpy()
+        labels = torch.cat([o["labels"] for o in outputs]).cpu().numpy()
+        metrics = compute_metrics(labels.astype(np.int32), probs.astype(np.float32))
+        self.log(metric_key, metrics.eer, prog_bar=True)
+        outputs.clear()
+
     # -- train --
     def training_step(self, batch: dict[str, Any], batch_idx: int) -> torch.Tensor:
-        return self._step(batch, "train")["loss"]
+        out = self._step(batch, "train")
+        if self.log_train_eer:
+            self._train_outputs.append({"probs": out["probs"], "labels": out["labels"]})
+        return out["loss"]
+
+    def on_train_epoch_end(self) -> None:
+        if not self.log_train_eer:
+            self._train_outputs.clear()
+            return
+        self._log_eer_from_outputs(self._train_outputs, "train/eer")
 
     # -- val --
     def validation_step(self, batch: dict[str, Any], batch_idx: int) -> None:
@@ -82,13 +109,7 @@ class DeepfakeLitModule(LightningModule):
         self._val_outputs.append(out)
 
     def on_validation_epoch_end(self) -> None:
-        if not self._val_outputs:
-            return
-        probs = torch.cat([o["probs"] for o in self._val_outputs]).cpu().numpy()
-        labels = torch.cat([o["labels"] for o in self._val_outputs]).cpu().numpy()
-        metrics = compute_metrics(labels.astype(np.int32), probs.astype(np.float32))
-        self.log("val/eer", metrics.eer, prog_bar=True)
-        self._val_outputs.clear()
+        self._log_eer_from_outputs(self._val_outputs, "val/eer")
 
     # -- optimiser --
     def configure_optimizers(self):
@@ -127,6 +148,7 @@ def build_datamodule(cfg: RunConfig) -> AudioDataModule:
         sample_rate=cfg.data.sample_rate,
         segment_samples=cfg.data.segment_samples,
         augment=cfg.data.augment,
+        rawboost_cfg=cfg.data.rawboost,
     )
 
 
@@ -162,9 +184,12 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
         lr=cfg.train.lr,
         weight_decay=cfg.train.weight_decay,
         loss_weights=cfg.train.loss_weights,
+        log_train_eer=cfg.train.log_train_eer,
     )
     data = build_datamodule(cfg)
 
+    if not cfg.logging.use_wandb:
+        os.environ["WANDB_MODE"] = "disabled"
     logger = WandbLogger(
         project=cfg.logging.project,
         save_dir=str(run_dir),
@@ -204,3 +229,5 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
         trainer.validate(lit, datamodule=data, ckpt_path=ckpt_path)
     else:
         trainer.fit(lit, datamodule=data, ckpt_path=ckpt_path)
+        # Run validation once at the end of training (using the last checkpoint, not necessarily the best)
+        trainer.validate(lit, datamodule=data)

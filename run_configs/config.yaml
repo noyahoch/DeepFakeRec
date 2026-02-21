@@ -15,6 +15,18 @@ data:
   sample_rate: 16000
   segment_samples: 64600
   augment: true
+  rawboost:
+    snr_min: 10
+    snr_max: 40
+    num_bands: 5
+    freq_lo: 20
+    freq_hi: 8000
+    bw_lo: 100
+    bw_hi: 1000
+    order_lo: 10
+    order_hi: 100
+    gain_lo: 0
+    gain_hi: 0
 
 train:
   batch_size: 5
@@ -33,6 +45,7 @@ train:
   checkpoint_save_dir: "checkpoints"
   checkpoint_path: null   # set to path/to/model.ckpt to resume or for eval_only
   eval_only: false        # if true, only run evaluation (no training, no checkpoint saved)
+  log_train_eer: true     # if true, compute and log EER on training set each epoch
 
 eval:
   metrics: ["eer"]
@@ -43,3 +56,4 @@ logging:
   run_dir: "runs"
   project: "audio-deepfake"
   log_every_n_steps: 20
+  use_wandb: true        # if false, wandb logging is disabled (e.g. for debug runs)

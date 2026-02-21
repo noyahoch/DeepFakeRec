@@ -7,3 +7,4 @@ runs/
 wget-log
 __pycache__/
 checkpoints/
+profiles/

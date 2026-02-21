@@ -25,7 +25,7 @@ try:
 except Exception:  # pragma: no cover
     LightningDataModule = object  # type: ignore[misc,assignment]
 
-from .rawboost import RawBoostAugment, RawBoostConfig
+from .new_rawboost import SSINoiseAugment, SSINoiseConfig
 
 
 class AudioSample(TypedDict):
@@ -163,16 +163,14 @@ class AudioDataset(Dataset[AudioSample]):
         sample_rate: int = 16000,
         segment_samples: int = 64600,
         augment: bool = False,
-        rawboost_cfg: RawBoostConfig | None = None,
+        rawboost_cfg: SSINoiseConfig | None = None,
     ) -> None:
         self.protocol = parse_protocol(protocol_path)
         self.audio_dir = audio_dir
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.augment = augment
-        self.rawboost = (
-            RawBoostAugment(rawboost_cfg or RawBoostConfig()) if augment else None
-        )
+        self.rawboost = SSINoiseAugment(rawboost_cfg) if augment else None
 
     def __len__(self) -> int:
         return len(self.protocol)
@@ -183,7 +181,8 @@ class AudioDataset(Dataset[AudioSample]):
         wav = load_audio(full_path, self.sample_rate)
         wav = crop_or_pad(wav, self.segment_samples)
         if self.rawboost is not None:
-            wav = self.rawboost(wav)
+            wav_np = self.rawboost(wav.numpy())
+            wav = torch.from_numpy(wav_np.astype(np.float32))
         return {"wav": wav, "label": entry.label, "meta": entry.meta}
 
 
@@ -199,6 +198,7 @@ class AudioDataModule(LightningDataModule):
         sample_rate: int = 16000,
         segment_samples: int = 64600,
         augment: bool = True,
+        rawboost_cfg: SSINoiseConfig | None = None,
     ) -> None:
         super().__init__()
         self.train_protocol_path = train_protocol_path
@@ -210,6 +210,7 @@ class AudioDataModule(LightningDataModule):
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.augment = augment
+        self.rawboost_cfg = rawboost_cfg
         self._train_ds: AudioDataset | None = None
         self._eval_ds: AudioDataset | None = None
 
@@ -221,6 +222,7 @@ class AudioDataModule(LightningDataModule):
                 sample_rate=self.sample_rate,
                 segment_samples=self.segment_samples,
                 augment=self.augment,
+                rawboost_cfg=self.rawboost_cfg,
             )
         if stage in (None, "fit", "validate", "test"):
             self._eval_ds = AudioDataset(

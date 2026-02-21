@@ -3,3 +3,6 @@
 train:
   num_workers: 0
 
+logging:
+  use_wandb: false
+

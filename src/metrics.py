@@ -32,14 +32,23 @@ def eer_score_interp(y_true: np.ndarray, y_score: np.ndarray) -> float:
 
     i = i[0]
     # Linear interpolation between i and i+1
-    x0, x1 = d[i], d[i+1]
+    x0, x1 = d[i], d[i + 1]
     w = x0 / (x0 - x1)  # in [0,1] if it crosses
-    eer = fpr[i] + w * (fpr[i+1] - fpr[i])
+    eer = fpr[i] + w * (fpr[i + 1] - fpr[i])
     return float(eer)
+
+
 @dataclass
 class MetricsResult:
     eer: float
 
 
-def compute_metrics(y_true: np.ndarray, y_score: np.ndarray) -> MetricsResult:
-    return MetricsResult(eer=eer_score_interp(y_true, y_score))
+def compute_metrics(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    interp: bool = True,
+) -> MetricsResult:
+    """interp=False uses a faster, non-interpolated EER (e.g. for train logging)."""
+    eer = eer_score_interp(y_true, y_score) if interp else eer_score(y_true, y_score)
+    return MetricsResult(eer=eer)
