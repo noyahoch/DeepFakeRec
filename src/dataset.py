@@ -139,7 +139,12 @@ def load_audio(path: str, sample_rate: int) -> torch.Tensor:
     return torch.from_numpy(y)
 
 
-def crop_or_pad(wav: torch.Tensor, segment_samples: int) -> torch.Tensor:
+def crop_or_pad(
+    wav: torch.Tensor,
+    segment_samples: int,
+    *,
+    random_crop: bool = False,
+) -> torch.Tensor:
     """
     Ensure fixed-length waveform. If too long, crop; if too short, pad or repeat.
     """
@@ -148,6 +153,10 @@ def crop_or_pad(wav: torch.Tensor, segment_samples: int) -> torch.Tensor:
     if wav.numel() == segment_samples:
         return wav
     if wav.numel() > segment_samples:
+        if random_crop:
+            max_start = wav.numel() - segment_samples
+            start = int(torch.randint(0, max_start + 1, (1,)).item())
+            return wav[start : start + segment_samples]
         return wav[:segment_samples]
     # Simple repeat-pad to reach segment length.
     reps = (segment_samples + wav.numel() - 1) // wav.numel()
@@ -163,6 +172,7 @@ class AudioDataset(Dataset[AudioSample]):
         sample_rate: int = 16000,
         segment_samples: int = 64600,
         augment: bool = False,
+        random_crop: bool = False,
         rawboost_cfg: SSINoiseConfig | None = None,
     ) -> None:
         self.protocol = parse_protocol(protocol_path)
@@ -170,6 +180,7 @@ class AudioDataset(Dataset[AudioSample]):
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.augment = augment
+        self.random_crop = random_crop
         self.rawboost = SSINoiseAugment(rawboost_cfg) if augment else None
 
     def __len__(self) -> int:
@@ -179,7 +190,9 @@ class AudioDataset(Dataset[AudioSample]):
         entry = self.protocol[idx]
         full_path = os.path.join(self.audio_dir, entry.audio_path)
         wav = load_audio(full_path, self.sample_rate)
-        wav = crop_or_pad(wav, self.segment_samples)
+        wav = crop_or_pad(
+            wav, self.segment_samples, random_crop=self.random_crop
+        )
         if self.rawboost is not None:
             wav_np = self.rawboost(wav.numpy())
             wav = torch.from_numpy(wav_np.astype(np.float32))
@@ -197,6 +210,7 @@ class AudioDataModule(LightningDataModule):
         num_workers: int = 4,
         sample_rate: int = 16000,
         segment_samples: int = 64600,
+        random_crop_train: bool = True,
         augment: bool = True,
         rawboost_cfg: SSINoiseConfig | None = None,
     ) -> None:
@@ -209,6 +223,7 @@ class AudioDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
+        self.random_crop_train = random_crop_train
         self.augment = augment
         self.rawboost_cfg = rawboost_cfg
         self._train_ds: AudioDataset | None = None
@@ -222,6 +237,7 @@ class AudioDataModule(LightningDataModule):
                 sample_rate=self.sample_rate,
                 segment_samples=self.segment_samples,
                 augment=self.augment,
+                random_crop=self.random_crop_train,
                 rawboost_cfg=self.rawboost_cfg,
             )
         if stage in (None, "fit", "validate", "test"):
@@ -231,6 +247,7 @@ class AudioDataModule(LightningDataModule):
                 sample_rate=self.sample_rate,
                 segment_samples=self.segment_samples,
                 augment=False,
+                random_crop=False,
             )
 
     def train_dataloader(self) -> DataLoader:

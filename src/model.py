@@ -59,6 +59,8 @@ class SlsClassifier(nn.Module):
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.weight_fc = nn.Linear(hidden_dim, 1, bias=True)
+        self.fc = nn.Linear(hidden_dim, hidden_dim, bias=True)
+        self.selu = nn.SELU()
         self.classifier = nn.Linear(hidden_dim, num_classes, bias=True)
 
     def forward(self, H: torch.Tensor) -> torch.Tensor:
@@ -85,7 +87,8 @@ class SlsClassifier(nn.Module):
         # Temporal maxpool -> (B, C)
         pooled = H_weighted.max(dim=1).values
 
-        logits = self.classifier(pooled)
+        hidden = self.selu(self.fc(pooled))
+        logits = self.classifier(hidden)
         _assert_rank(logits, 2, "logits")
         return logits
 

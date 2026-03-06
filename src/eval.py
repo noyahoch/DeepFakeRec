@@ -26,10 +26,23 @@ def load_checkpoint(cfg: RunConfig, ckpt_path: str) -> DeepfakeDetector:
         ),
     )
     state = torch.load(ckpt_path, map_location="cpu")
-    if "state_dict" in state:
-        model.load_state_dict(state["state_dict"], strict=False)
+    raw_state_dict = state["state_dict"] if "state_dict" in state else state
+
+    if any(k.startswith("model.") for k in raw_state_dict.keys()):
+        state_dict = {
+            k[len("model.") :]: v
+            for k, v in raw_state_dict.items()
+            if k.startswith("model.")
+        }
     else:
-        model.load_state_dict(state, strict=False)
+        state_dict = raw_state_dict
+
+    missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+    if missing_keys or unexpected_keys:
+        raise RuntimeError(
+            "Checkpoint/model key mismatch while loading eval model. "
+            f"Missing keys: {missing_keys}; Unexpected keys: {unexpected_keys}"
+        )
     model.eval()
     return model
 

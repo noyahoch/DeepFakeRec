@@ -147,6 +147,7 @@ def build_datamodule(cfg: RunConfig) -> AudioDataModule:
         num_workers=cfg.train.num_workers,
         sample_rate=cfg.data.sample_rate,
         segment_samples=cfg.data.segment_samples,
+        random_crop_train=cfg.data.random_crop_train,
         augment=cfg.data.augment,
         rawboost_cfg=cfg.data.rawboost,
     )
@@ -196,22 +197,32 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
         name=run_name,
     )
 
+    monitor_metric = cfg.train.selection_metric
+    if monitor_metric not in {"train/loss", "val/eer"}:
+        raise ValueError(
+            f"Unsupported train.selection_metric={monitor_metric!r}. "
+            "Supported values: 'train/loss', 'val/eer'."
+        )
+    monitor_train = monitor_metric.startswith("train/")
+
     callbacks: list[Any] = [
         EarlyStopping(
-            monitor="train/loss",
+            monitor=monitor_metric,
             patience=cfg.train.early_stop_patience,
             mode="min",
+            check_on_train_epoch_end=monitor_train,
         ),
     ]
     if not cfg.train.eval_only:
         callbacks.append(
             ModelCheckpoint(
                 dirpath=str(checkpoint_save_dir),
-                filename="best-{epoch}-{val/eer:.4f}",
-                monitor="val/eer",
+                filename="best-{epoch}",
+                monitor=monitor_metric,
                 save_top_k=1,
                 save_last=True,
                 mode="min",
+                save_on_train_epoch_end=monitor_train,
             ),
         )
 
@@ -230,5 +241,4 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
         trainer.validate(lit, datamodule=data, ckpt_path=ckpt_path)
     else:
         trainer.fit(lit, datamodule=data, ckpt_path=ckpt_path)
-        # Run validation once at the end of training (using the last checkpoint, not necessarily the best)
-        trainer.validate(lit, datamodule=data)
+        trainer.validate(lit, datamodule=data, ckpt_path="best")

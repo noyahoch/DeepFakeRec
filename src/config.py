@@ -28,6 +28,7 @@ class DataConfig:
     eval_audio_dir: str
     sample_rate: int = 16000
     segment_samples: int = 64600
+    random_crop_train: bool = True
     augment: bool = True
     rawboost: SSINoiseConfig = field(default_factory=SSINoiseConfig)
 
@@ -39,6 +40,7 @@ class TrainConfig:
     weight_decay: float = 1e-4
     epochs: int = 50
     early_stop_patience: int = 3
+    selection_metric: str = "train/loss"
     val_every_n_epochs: int = 1
     seed: int = 1234
     num_workers: int = 4
