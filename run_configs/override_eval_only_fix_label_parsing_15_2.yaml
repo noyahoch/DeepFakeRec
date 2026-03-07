@@ -5,6 +5,6 @@ train:
   eval_only: true
 
 data:
-  eval_protocol_path: "data/LA_2021/keys/LA/CM/trial_metadata.txt"
+  eval_protocol_path: "data/LA_2021/keys/LA/CM/eval_metadata.txt"
   eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
 
