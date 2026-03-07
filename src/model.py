@@ -1,159 +1,96 @@
 from __future__ import annotations
 
-from typing import Tuple
+import random
+import sys
+from pathlib import Path
+from typing import Union
 
+import fairseq
+import numpy as np
 import torch
-from torch import nn
-from transformers import Wav2Vec2Model
+import torch.nn as nn
+import torch.nn.functional as F
+from torch import Tensor
 
 
-def _assert_rank(t: torch.Tensor, rank: int, name: str) -> None:
-    if t.ndim != rank:
-        raise AssertionError(f"{name} must be rank {rank}, got shape {tuple(t.shape)}")
+class SSLModel(nn.Module):
+    def __init__(self, cp_path: str, device: torch.device):
+        super(SSLModel, self).__init__()
+        model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp_path])
+        self.model = model[0]
+        self.device = device
+        self.out_dim = 1024
+        return
+
+    def extract_feat(self, input_data: torch.Tensor):
+        if (
+            next(self.model.parameters()).device != input_data.device
+            or next(self.model.parameters()).dtype != input_data.dtype
+        ):
+            self.model.to(input_data.device, dtype=input_data.dtype)
+        self.model.train()
+        if True:
+            if input_data.ndim == 3:
+                input_tmp = input_data[:, :, 0]
+            else:
+                input_tmp = input_data
+            emb = self.model(input_tmp, mask=False, features_only=True)["x"]
+            layerresult = self.model(input_tmp, mask=False, features_only=True)[
+                "layer_results"
+            ]
+        return emb, layerresult
 
 
-class XlsrBackbone(nn.Module):
-    def __init__(self, model_name: str, freeze: bool = False, num_layers: int = 24):
-        super().__init__()
-        self.model = Wav2Vec2Model.from_pretrained(model_name)
-        self.num_layers = num_layers
-        if freeze:
-            for p in self.model.parameters():
-                p.requires_grad = False
+def getAttenF(layerResult):
+    poollayerResult = []
+    fullf = []
+    for layer in layerResult:
+        layery = layer[0].transpose(0, 1).transpose(1, 2)
+        layery = F.adaptive_avg_pool1d(layery, 1)
+        layery = layery.transpose(1, 2)
+        poollayerResult.append(layery)
+        x = layer[0].transpose(0, 1)
+        x = x.view(x.size(0), -1, x.size(1), x.size(2))
+        fullf.append(x)
 
-    def forward(
-        self, wav: torch.Tensor, *, attention_mask: torch.Tensor | None = None
-    ) -> torch.Tensor:
-        _assert_rank(wav, 2, "wav")
-        if wav.dtype != torch.float32:
-            wav = wav.float()
-        out = self.model(
-            wav,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-            return_dict=True,
-        )
-        hidden_states = out.hidden_states
-        if hidden_states is None:
-            raise RuntimeError("Wav2Vec2Model did not return hidden_states.")
-
-        # Wav2Vec2Model returns len = num_hidden_layers + 1.
-        layer_states = hidden_states[1:]
-        if len(layer_states) < self.num_layers:
-            raise AssertionError(
-                f"Expected at least {self.num_layers} hidden layers, got {len(layer_states)}."
-            )
-        layer_states = layer_states[: self.num_layers]
-
-        # Stack to (L, B, T', C)
-        H = torch.stack(layer_states, dim=0)
-        _assert_rank(H, 4, "H")
-        return H
-
-
-class SlsClassifier(nn.Module):
-    def __init__(
-        self, num_layers: int = 24, hidden_dim: int = 1024, num_classes: int = 2
-    ):
-        super().__init__()
-        self.num_layers = num_layers
-        self.hidden_dim = hidden_dim
-        self.weight_fc = nn.Linear(hidden_dim, 1, bias=True)
-        self.fc = nn.Linear(hidden_dim, hidden_dim, bias=True)
-        self.selu = nn.SELU()
-        self.classifier = nn.Linear(hidden_dim, num_classes, bias=True)
-
-    def forward(self, H: torch.Tensor) -> torch.Tensor:
-        # H: (L, B, T', C)
-        _assert_rank(H, 4, "H")
-        L, B, T, C = H.shape
-        if L != self.num_layers:
-            raise AssertionError(f"Expected {self.num_layers} layers, got {L}")
-        if C != self.hidden_dim:
-            raise AssertionError(f"Expected hidden_dim {self.hidden_dim}, got {C}")
-        if T <= 0:
-            raise AssertionError("T' must be > 0")
-
-        # avgpool over time -> (L, B, 1, C)
-        H_avg = H.mean(dim=2, keepdim=True)
-
-        # FC per layer -> (L, B, 1, 1)
-        H_fc = self.weight_fc(H_avg.reshape(L * B, C)).view(L, B, 1, 1)
-        alpha = torch.sigmoid(H_fc)
-
-        # Weighted sum across layers -> (B, T', C)
-        H_weighted = (alpha * H).sum(dim=0)
-
-        # Temporal maxpool -> (B, C)
-        pooled = H_weighted.max(dim=1).values
-
-        hidden = self.selu(self.fc(pooled))
-        logits = self.classifier(hidden)
-        _assert_rank(logits, 2, "logits")
-        return logits
+    layery = torch.cat(poollayerResult, dim=1)
+    fullfeature = torch.cat(fullf, dim=1)
+    return layery, fullfeature
 
 
 class DeepfakeDetector(nn.Module):
-    def __init__(self, backbone: XlsrBackbone, classifier: SlsClassifier):
+    def __init__(self, model_path: str, device: torch.device):
         super().__init__()
-        self.backbone = backbone
-        self.classifier = classifier
+        self.device = device
+        ckpt_path = Path(model_path)
+        if ckpt_path.is_dir():
+            ckpt_path = ckpt_path / "xlsr2_300m.pt"
+        self.ssl_model = SSLModel(str(ckpt_path), self.device)
+        self.first_bn = nn.BatchNorm2d(num_features=1)
+        self.selu = nn.SELU(inplace=True)
+        self.fc0 = nn.Linear(1024, 1)
+        self.sig = nn.Sigmoid()
+        self.fc1 = nn.Linear(22847, 1024)
+        self.fc3 = nn.Linear(1024, 2)
+        self.logsoftmax = nn.LogSoftmax(dim=1)
 
-    def forward(
-        self, wav: torch.Tensor, attention_mask: torch.Tensor | None = None
-    ) -> torch.Tensor:
-        H = self.backbone(wav, attention_mask=attention_mask)
-        return self.classifier(H)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_ssl_feat, layerResult = self.ssl_model.extract_feat(x.squeeze(-1))
+        y0, fullfeature = getAttenF(layerResult)
+        y0 = self.fc0(y0)
+        y0 = self.sig(y0)
+        y0 = y0.view(y0.shape[0], y0.shape[1], y0.shape[2], -1)
+        fullfeature = fullfeature * y0
+        fullfeature = torch.sum(fullfeature, 1)
+        fullfeature = fullfeature.unsqueeze(dim=1)
 
-
-def _smoke_test_backbone(model_name: str = "facebook/wav2vec2-xls-r-300m") -> None:
-    """
-    Smoke test: load XLS-R backbone and run a short forward pass.
-    This validates that the checkpoint can be resolved and hidden states are returned.
-    """
-    backbone = XlsrBackbone(model_name=model_name, freeze=True, num_layers=24)
-    wav = torch.zeros(1, 64600, dtype=torch.float32)
-    with torch.no_grad():
-        H = backbone(wav)
-    if H.shape[0] != 24 or H.shape[-1] != 1024:
-        raise AssertionError(f"Unexpected backbone output shape: {tuple(H.shape)}")
-    print(f"Backbone loaded: {model_name}")
-    print(f"H shape: {tuple(H.shape)}")
-
-
-def _smoke_test_classifier() -> None:
-    """
-    Smoke test: run SLS classifier with a synthetic hidden-state tensor.
-    """
-    classifier = SlsClassifier(num_layers=24, hidden_dim=1024, num_classes=2)
-    H = torch.zeros(24, 2, 10, 1024, dtype=torch.float32)
-    with torch.no_grad():
-        logits = classifier(H)
-    if logits.shape != (2, 2):
-        raise AssertionError(
-            f"Unexpected classifier output shape: {tuple(logits.shape)}"
-        )
-    print(f"Classifier output shape: {tuple(logits.shape)}")
-
-
-def _smoke_test_full_model(model_name: str = "facebook/wav2vec2-xls-r-300m") -> None:
-    """
-    Smoke test: end-to-end forward pass (backbone + SLS classifier).
-    """
-    backbone = XlsrBackbone(model_name=model_name, freeze=True, num_layers=24)
-    classifier = SlsClassifier(num_layers=24, hidden_dim=1024, num_classes=2)
-    model = DeepfakeDetector(backbone=backbone, classifier=classifier)
-    wav = torch.zeros(1, 64600, dtype=torch.float32)
-    with torch.no_grad():
-        logits = model(wav)
-    if logits.shape != (1, 2):
-        raise AssertionError(f"Unexpected model output shape: {tuple(logits.shape)}")
-    print(f"Full model output shape: {tuple(logits.shape)}")
-
-
-if __name__ == "__main__":
-    # Note: This requires access to the pretrained checkpoint (e.g., via Hugging Face).
-    # If running offline, download the checkpoint beforehand or set TRANSFORMERS_CACHE.
-    _smoke_test_backbone()
-    _smoke_test_classifier()
-    _smoke_test_full_model()
+        x = self.first_bn(fullfeature)
+        x = self.selu(x)
+        x = F.max_pool2d(x, (3, 3))
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = self.selu(x)
+        x = self.fc3(x)
+        x = self.selu(x)
+        output = self.logsoftmax(x)
+        return output

@@ -24,7 +24,7 @@ from torch.nn import functional as F
 from .config import RunConfig, seed_everything
 from .dataset import AudioDataModule
 from .metrics import compute_metrics
-from .model import DeepfakeDetector, SlsClassifier, XlsrBackbone
+from .model import DeepfakeDetector
 
 # ---------------------------------------------------------------------------
 # Lightning Module
@@ -49,7 +49,7 @@ class DeepfakeLitModule(LightningModule):
 
         # Weighted CE – paper uses [0.1, 0.9]
         w = torch.FloatTensor(loss_weights) if loss_weights else None
-        self.criterion = nn.CrossEntropyLoss(weight=w)
+        self.criterion = nn.NLLLoss(weight=w)
 
         self._val_outputs: list[dict[str, torch.Tensor]] = []
         self._train_outputs: list[dict[str, torch.Tensor]] = []
@@ -58,7 +58,7 @@ class DeepfakeLitModule(LightningModule):
     def forward(
         self, wav: torch.Tensor, attention_mask: torch.Tensor | None = None
     ) -> torch.Tensor:
-        return self.model(wav, attention_mask=attention_mask)
+        return self.model(wav)
 
     # -- shared step --
     def _step(self, batch: dict[str, Any], stage: str) -> dict[str, torch.Tensor]:
@@ -69,7 +69,7 @@ class DeepfakeLitModule(LightningModule):
 
         preds = logits.argmax(dim=1)
         acc = (preds == label).float().mean()
-        probs = torch.softmax(logits, dim=-1)[:, 1]
+        probs = torch.exp(logits)[:, 1]
 
         self.log(f"{stage}/loss", loss, prog_bar=True, on_epoch=True, on_step=False)
         self.log(f"{stage}/acc", acc, prog_bar=True, on_epoch=True, on_step=False)
@@ -124,17 +124,11 @@ class DeepfakeLitModule(LightningModule):
 
 
 def build_model(cfg: RunConfig) -> DeepfakeDetector:
-    backbone = XlsrBackbone(
-        model_name=cfg.model.pretrained_name,
-        freeze=cfg.model.freeze_backbone,
-        num_layers=cfg.model.num_layers,
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return DeepfakeDetector(
+        model_path=cfg.model.pretrained_name,
+        device=device,
     )
-    classifier = SlsClassifier(
-        num_layers=cfg.model.num_layers,
-        hidden_dim=cfg.model.hidden_dim,
-        num_classes=cfg.model.num_classes,
-    )
-    return DeepfakeDetector(backbone=backbone, classifier=classifier)
 
 
 def build_datamodule(cfg: RunConfig) -> AudioDataModule:

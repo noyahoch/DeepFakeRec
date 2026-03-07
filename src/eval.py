@@ -9,22 +9,12 @@ from torch.utils.data import DataLoader
 from .config import RunConfig
 from .dataset import AudioDataset
 from .metrics import compute_metrics
-from .model import DeepfakeDetector, SlsClassifier, XlsrBackbone
+from .model import DeepfakeDetector
 
 
 def load_checkpoint(cfg: RunConfig, ckpt_path: str) -> DeepfakeDetector:
-    model = DeepfakeDetector(
-        backbone=XlsrBackbone(
-            model_name=cfg.model.pretrained_name,
-            freeze=False,
-            num_layers=cfg.model.num_layers,
-        ),
-        classifier=SlsClassifier(
-            num_layers=cfg.model.num_layers,
-            hidden_dim=cfg.model.hidden_dim,
-            num_classes=cfg.model.num_classes,
-        ),
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = DeepfakeDetector(model_path=cfg.model.pretrained_name, device=device)
     state = torch.load(ckpt_path, map_location="cpu")
     raw_state_dict = state["state_dict"] if "state_dict" in state else state
 
@@ -72,7 +62,7 @@ def evaluate(cfg: RunConfig, ckpt_path: str) -> dict[str, float]:
         wav = batch["wav"].to(device)
         labels = batch["label"]
         logits = model(wav)
-        probs = torch.softmax(logits, dim=-1)[:, 1]
+        probs = torch.exp(logits)[:, 1]
         all_probs.append(probs.cpu().numpy())
         all_labels.append(labels.cpu().numpy())
 
