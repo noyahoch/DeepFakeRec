@@ -9,7 +9,9 @@ from src.train import train
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="run_configs/config.yaml", help="Path to config YAML")
+    parser.add_argument(
+        "--config", default="run_configs/config.yaml", help="Path to config YAML"
+    )
     parser.add_argument("--mode", choices=["train", "eval"], default="train")
     parser.add_argument("--ckpt", type=str, default=None)
     parser.add_argument(
@@ -25,12 +27,19 @@ def main() -> None:
         metavar="YAML",
         help="Optional override config (inherits from --config, only set keys to override).",
     )
+    parser.add_argument(
+        "--wandb-key",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Path to file containing W&B API key (e.g. api_keys/yoni.txt).",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config, override_path=args.override)
 
     if args.mode == "train":
-        train(cfg, run_name=args.run_name)
+        train(cfg, run_name=args.run_name, wandb_key_path=args.wandb_key)
     else:
         if not args.ckpt:
             raise SystemExit("--ckpt required for eval mode")

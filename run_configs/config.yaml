@@ -34,7 +34,7 @@ train:
   weight_decay: 0.0001
   epochs: 50
   early_stop_patience: 3
-  val_every_n_epochs: 3
+  val_every_n_epochs: 10
   seed: 1234
   num_workers: 4
   precision: "16-mixed"
