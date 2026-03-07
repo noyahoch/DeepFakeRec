@@ -13,7 +13,7 @@ from .new_rawboost import SSINoiseConfig
 
 @dataclass
 class ModelConfig:
-    pretrained_name: str = "models/xlsr2_300m.pt"
+    pretrained_name: str = "models/wav2vec2-xls-r-300m"
     freeze_backbone: bool = True
     num_layers: int = 24
     hidden_dim: int = 1024

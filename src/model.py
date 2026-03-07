@@ -1,23 +1,15 @@
 from __future__ import annotations
 
-import random
-import sys
-from pathlib import Path
-from typing import Union
-
-import fairseq
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
+from transformers import Wav2Vec2Model
 
 
 class SSLModel(nn.Module):
     def __init__(self, cp_path: str, device: torch.device):
         super(SSLModel, self).__init__()
-        model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([cp_path])
-        self.model = model[0]
+        self.model = Wav2Vec2Model.from_pretrained(cp_path)
         self.device = device
         self.out_dim = 1024
         return
@@ -29,15 +21,22 @@ class SSLModel(nn.Module):
         ):
             self.model.to(input_data.device, dtype=input_data.dtype)
         self.model.train()
-        if True:
-            if input_data.ndim == 3:
-                input_tmp = input_data[:, :, 0]
-            else:
-                input_tmp = input_data
-            emb = self.model(input_tmp, mask=False, features_only=True)["x"]
-            layerresult = self.model(input_tmp, mask=False, features_only=True)[
-                "layer_results"
-            ]
+        if input_data.ndim == 3:
+            input_tmp = input_data[:, :, 0]
+        else:
+            input_tmp = input_data
+        out = self.model(
+            input_values=input_tmp,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+        emb = out.last_hidden_state
+        hidden_states = out.hidden_states
+        if hidden_states is None:
+            raise RuntimeError("Wav2Vec2Model did not return hidden states.")
+        # fairseq layer_results stores each layer as time-major tensor (T, B, C).
+        # Keep the same access pattern used by the original model code.
+        layerresult = [(h.transpose(0, 1),) for h in hidden_states[1:]]
         return emb, layerresult
 
 
@@ -62,10 +61,7 @@ class DeepfakeDetector(nn.Module):
     def __init__(self, model_path: str, device: torch.device):
         super().__init__()
         self.device = device
-        ckpt_path = Path(model_path)
-        if ckpt_path.is_dir():
-            ckpt_path = ckpt_path / "xlsr2_300m.pt"
-        self.ssl_model = SSLModel(str(ckpt_path), self.device)
+        self.ssl_model = SSLModel(model_path, self.device)
         self.first_bn = nn.BatchNorm2d(num_features=1)
         self.selu = nn.SELU(inplace=True)
         self.fc0 = nn.Linear(1024, 1)
