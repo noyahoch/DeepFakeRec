@@ -49,7 +49,7 @@ class DeepfakeLitModule(LightningModule):
 
         # Weighted CE – paper uses [0.1, 0.9]
         w = torch.FloatTensor(loss_weights) if loss_weights else None
-        self.criterion = nn.NLLLoss(weight=w)
+        self.criterion = nn.CrossEntropyLoss(weight=w)
 
         self._val_outputs: list[dict[str, torch.Tensor]] = []
         self._train_outputs: list[dict[str, torch.Tensor]] = []
@@ -69,7 +69,7 @@ class DeepfakeLitModule(LightningModule):
 
         preds = logits.argmax(dim=1)
         acc = (preds == label).float().mean()
-        probs = torch.exp(logits)[:, 1]
+        probs = torch.softmax(logits, dim=-1)[:, 1]
 
         self.log(f"{stage}/loss", loss, prog_bar=True, on_epoch=True, on_step=False)
         self.log(f"{stage}/acc", acc, prog_bar=True, on_epoch=True, on_step=False)

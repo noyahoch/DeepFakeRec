@@ -28,7 +28,7 @@ class DataConfig:
     eval_audio_dir: str
     sample_rate: int = 16000
     segment_samples: int = 64600
-    random_crop_train: bool = True
+    random_crop_train: bool = False
     augment: bool = True
     rawboost: SSINoiseConfig = field(default_factory=SSINoiseConfig)
 

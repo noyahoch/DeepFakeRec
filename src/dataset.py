@@ -190,12 +190,12 @@ class AudioDataset(Dataset[AudioSample]):
         entry = self.protocol[idx]
         full_path = os.path.join(self.audio_dir, entry.audio_path)
         wav = load_audio(full_path, self.sample_rate)
-        wav = crop_or_pad(
-            wav, self.segment_samples, random_crop=self.random_crop
-        )
         if self.rawboost is not None:
             wav_np = self.rawboost(wav.numpy())
             wav = torch.from_numpy(wav_np.astype(np.float32))
+        wav = crop_or_pad(
+            wav, self.segment_samples, random_crop=self.random_crop
+        )
         return {"wav": wav, "label": entry.label, "meta": entry.meta}
 
 
