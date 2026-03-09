@@ -1,6 +1,6 @@
 model:
   pretrained_name: "models/wav2vec2-xls-r-300m"
-  freeze_backbone: true
+  freeze_backbone: false  # reference fine-tunes the entire XLS-R backbone
   num_layers: 24
   hidden_dim: 1024
   num_classes: 2
@@ -29,23 +29,23 @@ data:
     gain_hi: 0
 
 train:
-  batch_size: 5
+  batch_size: 14          # reference uses 14
   lr: 0.000001
   weight_decay: 0.0001
-  epochs: 50
-  early_stop_patience: 3
-  val_every_n_epochs: 3
+  epochs: 100             # reference uses 100
+  early_stop_patience: 1  # reference stops after 1 epoch without improvement
+  val_every_n_epochs: 1
   seed: 1234
-  num_workers: 4
-  precision: "16-mixed"
-  grad_clip: 1.0
+  num_workers: 8          # reference uses 8
+  precision: "32-true"    # reference trains in FP32
+  grad_clip: null         # reference has no gradient clipping
   loss_weights:
     - 0.1  # spoof (class 0)
     - 0.9  # bonafide (class 1)
   checkpoint_save_dir: "checkpoints"
-  checkpoint_path: null   # set to path/to/model.ckpt to resume or for eval_only
-  eval_only: false        # if true, only run evaluation (no training, no checkpoint saved)
-  log_train_eer: true     # if true, compute and log EER on training set each epoch
+  checkpoint_path: null
+  eval_only: false
+  log_train_eer: true
 
 eval:
   metrics: ["eer"]
@@ -56,4 +56,4 @@ logging:
   run_dir: "runs"
   project: "audio-deepfake"
   log_every_n_steps: 20
-  use_wandb: true        # if false, wandb logging is disabled (e.g. for debug runs)
+  use_wandb: true

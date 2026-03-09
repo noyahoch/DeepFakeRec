@@ -34,16 +34,16 @@ class DataConfig:
 
 @dataclass
 class TrainConfig:
-    batch_size: int = 5
+    batch_size: int = 14
     lr: float = 1e-6
     weight_decay: float = 1e-4
-    epochs: int = 50
-    early_stop_patience: int = 3
+    epochs: int = 100
+    early_stop_patience: int = 1
     val_every_n_epochs: int = 1
     seed: int = 1234
-    num_workers: int = 4
-    precision: str = "16-mixed"
-    grad_clip: float | None = 1.0
+    num_workers: int = 8
+    precision: str = "32-true"
+    grad_clip: float | None = None
     loss_weights: list[float] = field(default_factory=lambda: [0.1, 0.9])
     checkpoint_save_dir: str = "checkpoints"
     checkpoint_path: str | None = None  # path to .ckpt to resume or run eval-only

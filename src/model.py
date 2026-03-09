@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Tuple
-
 import torch
+import torch.nn.functional as F
 from torch import nn
 from transformers import Wav2Vec2Model
+
+# With segment_samples=64600 at 16 kHz, XLS-R produces T'=201 frames.
+# After MaxPool2d(3,3): floor((201-3)/3)+1=67, floor((1024-3)/3)+1=341 → 67*341=22847.
+_FLAT_DIM_AFTER_POOL = 22847
 
 
 def _assert_rank(t: torch.Tensor, rank: int, name: str) -> None:
@@ -22,7 +25,7 @@ class XlsrBackbone(nn.Module):
                 p.requires_grad = False
 
     def forward(
-        self, wav: torch.Tensor, *, attention_mask: torch.Tensor | None = None
+        self, wav: torch.Tensor, attention_mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         _assert_rank(wav, 2, "wav")
         if wav.dtype != torch.float32:
@@ -37,7 +40,6 @@ class XlsrBackbone(nn.Module):
         if hidden_states is None:
             raise RuntimeError("Wav2Vec2Model did not return hidden_states.")
 
-        # Wav2Vec2Model returns len = num_hidden_layers + 1.
         layer_states = hidden_states[1:]
         if len(layer_states) < self.num_layers:
             raise AssertionError(
@@ -45,24 +47,34 @@ class XlsrBackbone(nn.Module):
             )
         layer_states = layer_states[: self.num_layers]
 
-        # Stack to (L, B, T', C)
         H = torch.stack(layer_states, dim=0)
         _assert_rank(H, 4, "H")
         return H
 
 
 class SlsClassifier(nn.Module):
+    """SLS classifier matching the reference (Zhang et al., ACM MM 2024).
+
+    Architecture after layer-weighted sum:
+      BatchNorm2d → SELU → MaxPool2d(3,3) → Linear(22847,1024) → SELU
+      → Linear(1024,2) → SELU → LogSoftmax
+    """
+
     def __init__(
         self, num_layers: int = 24, hidden_dim: int = 1024, num_classes: int = 2
     ):
         super().__init__()
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
+
         self.weight_fc = nn.Linear(hidden_dim, 1, bias=True)
-        self.classifier = nn.Linear(hidden_dim, num_classes, bias=True)
+        self.first_bn = nn.BatchNorm2d(num_features=1)
+        self.selu = nn.SELU(inplace=True)
+        self.fc1 = nn.Linear(_FLAT_DIM_AFTER_POOL, 1024)
+        self.fc3 = nn.Linear(1024, num_classes)
+        self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, H: torch.Tensor) -> torch.Tensor:
-        # H: (L, B, T', C)
         _assert_rank(H, 4, "H")
         L, B, T, C = H.shape
         if L != self.num_layers:
@@ -72,22 +84,23 @@ class SlsClassifier(nn.Module):
         if T <= 0:
             raise AssertionError("T' must be > 0")
 
-        # avgpool over time -> (L, B, 1, C)
         H_avg = H.mean(dim=2, keepdim=True)
-
-        # FC per layer -> (L, B, 1, 1)
         H_fc = self.weight_fc(H_avg.reshape(L * B, C)).view(L, B, 1, 1)
         alpha = torch.sigmoid(H_fc)
 
-        # Weighted sum across layers -> (B, T', C)
-        H_weighted = (alpha * H).sum(dim=0)
+        H_weighted = (alpha * H).sum(dim=0)  # (B, T', C)
 
-        # Temporal maxpool -> (B, C)
-        pooled = H_weighted.max(dim=1).values
-
-        logits = self.classifier(pooled)
-        _assert_rank(logits, 2, "logits")
-        return logits
+        x = H_weighted.unsqueeze(1)  # (B, 1, T', C)
+        x = self.first_bn(x)
+        x = self.selu(x)
+        x = F.max_pool2d(x, (3, 3))
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = self.selu(x)
+        x = self.fc3(x)
+        x = self.selu(x)
+        x = self.logsoftmax(x)
+        return x
 
 
 class DeepfakeDetector(nn.Module):
@@ -121,9 +134,10 @@ def _smoke_test_backbone(model_name: str = "facebook/wav2vec2-xls-r-300m") -> No
 def _smoke_test_classifier() -> None:
     """
     Smoke test: run SLS classifier with a synthetic hidden-state tensor.
+    T'=201 matches 64600 samples through XLS-R's conv feature extractor.
     """
     classifier = SlsClassifier(num_layers=24, hidden_dim=1024, num_classes=2)
-    H = torch.zeros(24, 2, 10, 1024, dtype=torch.float32)
+    H = torch.zeros(24, 2, 201, 1024, dtype=torch.float32)
     with torch.no_grad():
         logits = classifier(H)
     if logits.shape != (2, 2):

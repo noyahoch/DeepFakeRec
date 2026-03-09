@@ -53,17 +53,17 @@ def evaluate(cfg: RunConfig, ckpt_path: str) -> dict[str, float]:
         num_workers=cfg.train.num_workers,
     )
 
-    all_probs = []
+    all_scores = []
     all_labels = []
     for batch in loader:
         wav = batch["wav"].to(device)
         labels = batch["label"]
-        logits = model(wav)
-        probs = torch.softmax(logits, dim=-1)[:, 1]
-        all_probs.append(probs.cpu().numpy())
+        out = model(wav)  # log-softmax output
+        scores = out[:, 1]  # log-prob of bonafide class (matches reference)
+        all_scores.append(scores.cpu().numpy())
         all_labels.append(labels.cpu().numpy())
 
-    y_score = np.concatenate(all_probs)
+    y_score = np.concatenate(all_scores)
     y_true = np.concatenate(all_labels)
     metrics = compute_metrics(y_true.astype(np.int32), y_score.astype(np.float32))
 

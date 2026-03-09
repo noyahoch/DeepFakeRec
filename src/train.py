@@ -64,17 +64,17 @@ class DeepfakeLitModule(LightningModule):
     def _step(self, batch: dict[str, Any], stage: str) -> dict[str, torch.Tensor]:
         wav = batch["wav"]
         label = batch["label"]
-        logits = self(wav)
-        loss = self.criterion(logits, label)
+        out = self(wav)  # log-softmax output (matches reference)
+        loss = self.criterion(out, label)
 
-        preds = logits.argmax(dim=1)
+        preds = out.argmax(dim=1)
         acc = (preds == label).float().mean()
-        probs = torch.softmax(logits, dim=-1)[:, 1]
+        scores = out[:, 1]  # log-prob of bonafide class
 
         self.log(f"{stage}/loss", loss, prog_bar=True, on_epoch=True, on_step=False)
         self.log(f"{stage}/acc", acc, prog_bar=True, on_epoch=True, on_step=False)
 
-        return {"loss": loss, "probs": probs.detach(), "labels": label.detach()}
+        return {"loss": loss, "probs": scores.detach(), "labels": label.detach()}
 
     def _log_eer_from_outputs(
         self,
