@@ -59,6 +59,7 @@ class TrainConfig:
 class EvalConfig:
     metrics: list[str] = None
     save_scores_path: str | None = None
+    batch_size: int = 32
 
 
 @dataclass
@@ -140,6 +141,9 @@ def load_config(path: str, override_path: str | None = None) -> RunConfig:
 
 
 def seed_everything(seed: int) -> None:
+    import random
+
+    random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)

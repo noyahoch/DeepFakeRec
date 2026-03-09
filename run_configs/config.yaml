@@ -6,10 +6,10 @@ model:
   num_classes: 2
 
 data:
-  train_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.train.trn.txt"
-  train_audio_dir: "data/LA_2019/ASVspoof2019_LA_train/flac"
-  eval_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt"
-  eval_audio_dir: "data/LA_2019/ASVspoof2019_LA_eval/flac"
+  train_protocol_path: "data/LA_2019/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.train.trn.txt"
+  train_audio_dir: "data/LA_2019/LA/ASVspoof2019_LA_train/flac"
+  eval_protocol_path: "data/LA_2019/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt"
+  eval_audio_dir: "data/LA_2019/LA/ASVspoof2019_LA_eval/flac"
   # eval_protocol_path: "data/LA_2021/keys/LA/CM/trial_metadata.txt"
   # eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
   sample_rate: 16000
@@ -29,11 +29,11 @@ data:
     gain_hi: 0
 
 train:
-  batch_size: 14          # reference uses 14
+  batch_size: 5           # paper Section 4.2 specifies batch_size=5
   lr: 0.000001
   weight_decay: 0.0001
-  epochs: 100             # reference uses 100
-  early_stop_patience: 1  # reference stops after 1 epoch without improvement
+  epochs: 50              # paper Section 4.2 specifies 50 epochs
+  early_stop_patience: 3  # paper Section 4.2 specifies patience=3
   val_every_n_epochs: 1
   seed: 1234
   num_workers: 8          # reference uses 8
@@ -50,6 +50,7 @@ train:
 eval:
   metrics: ["eer"]
   save_scores_path: null
+  batch_size: 32
 
 logging:
   backend: "wandb"

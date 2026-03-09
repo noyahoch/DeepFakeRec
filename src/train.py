@@ -144,6 +144,7 @@ def build_datamodule(cfg: RunConfig) -> AudioDataModule:
         eval_protocol_path=cfg.data.eval_protocol_path,
         eval_audio_dir=cfg.data.eval_audio_dir,
         batch_size=cfg.train.batch_size,
+        eval_batch_size=cfg.eval.batch_size,
         num_workers=cfg.train.num_workers,
         sample_rate=cfg.data.sample_rate,
         segment_samples=cfg.data.segment_samples,

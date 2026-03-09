@@ -48,7 +48,7 @@ def evaluate(cfg: RunConfig, ckpt_path: str) -> dict[str, float]:
     )
     loader = DataLoader(
         dataset,
-        batch_size=cfg.train.batch_size,
+        batch_size=cfg.eval.batch_size,
         shuffle=False,
         num_workers=cfg.train.num_workers,
     )

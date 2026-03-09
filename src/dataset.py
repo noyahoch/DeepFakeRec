@@ -179,10 +179,10 @@ class AudioDataset(Dataset[AudioSample]):
         entry = self.protocol[idx]
         full_path = os.path.join(self.audio_dir, entry.audio_path)
         wav = load_audio(full_path, self.sample_rate)
-        wav = crop_or_pad(wav, self.segment_samples)
         if self.rawboost is not None:
             wav_np = self.rawboost(wav.numpy())
             wav = torch.from_numpy(wav_np.astype(np.float32))
+        wav = crop_or_pad(wav, self.segment_samples)
         return {"wav": wav, "label": entry.label, "meta": entry.meta}
 
 
@@ -194,6 +194,7 @@ class AudioDataModule(LightningDataModule):
         eval_protocol_path: str,
         eval_audio_dir: str,
         batch_size: int = 5,
+        eval_batch_size: int = 32,
         num_workers: int = 4,
         sample_rate: int = 16000,
         segment_samples: int = 64600,
@@ -206,6 +207,7 @@ class AudioDataModule(LightningDataModule):
         self.eval_protocol_path = eval_protocol_path
         self.eval_audio_dir = eval_audio_dir
         self.batch_size = batch_size
+        self.eval_batch_size = eval_batch_size
         self.num_workers = num_workers
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
@@ -249,7 +251,7 @@ class AudioDataModule(LightningDataModule):
             raise RuntimeError("DataModule not set up. Call setup('fit') first.")
         return DataLoader(
             self._eval_ds,
-            batch_size=self.batch_size,
+            batch_size=self.eval_batch_size,
             shuffle=False,
             num_workers=self.num_workers,
         )
@@ -259,7 +261,7 @@ class AudioDataModule(LightningDataModule):
             raise RuntimeError("DataModule not set up. Call setup('test') first.")
         return DataLoader(
             self._eval_ds,
-            batch_size=self.batch_size,
+            batch_size=self.eval_batch_size,
             shuffle=False,
             num_workers=self.num_workers,
         )
