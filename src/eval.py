@@ -145,21 +145,10 @@ def evaluate(cfg: RunConfig, ckpt_path: str, run_name: str | None = None) -> dic
         out_path = Path(cfg.eval.save_scores_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         to_save = y_score
-        if getattr(cfg.eval, "save_scores_as_probability", False):
-            # y_score is "higher = more bonafide": either log P(bonafide) or -log P(bonafide) after flip.
-            # P(bonafide) = exp(y_score) when not flipped, exp(-y_score) when flipped.
-            to_save = np.exp(-y_score) if did_flip else np.exp(y_score)
-            to_save = np.clip(to_save, 1e-10, 1.0 - 1e-10)  # avoid 0/1 for readability
-        if np.std(to_save) < 1e-6 and (np.allclose(to_save, 1.0) or np.allclose(to_save, 0.0)):
-            print(
-                "WARNING: Saved scores are all ~same value (constant model output). "
-                "Set eval.save_scores_as_probability: false and re-run to see raw log-scores; verify checkpoint loaded."
-            )
         with open(out_path, "w") as f:
             for fid, s in zip(all_file_ids, to_save):
                 f.write(f"{fid} {s}\n")
-        fmt = "P(bonafide) in (0,1)" if getattr(cfg.eval, "save_scores_as_probability", False) else "raw (higher=bonafide)"
-        print(f"Scores saved to {cfg.eval.save_scores_path} ({fmt}, file_id score per line)")
+        print(f"Scores saved to {cfg.eval.save_scores_path} (raw (higher=bonafide), file_id score per line)")
 
     results = {"eer": metrics.eer}
     if cfg.logging.use_wandb:

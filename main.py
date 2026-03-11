@@ -30,6 +30,13 @@ def main() -> None:
         action="store_true",
         help="Override model.freeze_backbone to False (so backbone trains). Without this, both runs use the same config → bit-identical results.",
     )
+    parser.add_argument(
+        "--wandb-key",
+        dest="wandb_key",
+        type=str,
+        default=None,
+        help="Path to file containing wandb API key for login.",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config, override_path=args.override)
@@ -37,7 +44,7 @@ def main() -> None:
         cfg.model.freeze_backbone = False
 
     if args.mode == "train":
-        train(cfg, run_name=args.run_name)
+        train(cfg, run_name=args.run_name, wandb_key_path=args.wandb_key)
     else:
         if not args.ckpt:
             raise SystemExit("--ckpt required for eval mode")

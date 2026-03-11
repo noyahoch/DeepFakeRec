@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import random
 import warnings
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -17,6 +17,7 @@ try:
 except Exception:  # pragma: no cover
     LightningDataModule = object  # type: ignore[misc,assignment]
 
+from .config import RawboostSSIConfig
 from .rawboost_ssi import ssi_additive_noise
 
 
@@ -172,6 +173,7 @@ class AudioDataset(Dataset[AudioSample]):
         max_trials: int | None = None,
         protocol_key_path: str | None = None,
         phase_filter: tuple[int, str] | None = None,
+        rawboost_cfg: RawboostSSIConfig | None = None,
     ) -> None:
         protocol = parse_protocol(
             protocol_path,
@@ -189,6 +191,7 @@ class AudioDataset(Dataset[AudioSample]):
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.training = training
+        self.rawboost_cfg = rawboost_cfg
 
     def __len__(self) -> int:
         return len(self.protocol)
@@ -198,7 +201,12 @@ class AudioDataset(Dataset[AudioSample]):
         full_path = os.path.join(self.audio_dir, entry.audio_path)
         wav = load_audio(full_path, self.sample_rate)
         if self.training:
-            wav_np = ssi_additive_noise(wav.numpy(), self.sample_rate)
+            if self.rawboost_cfg is not None:
+                wav_np = ssi_additive_noise(
+                    wav.numpy(), self.sample_rate, **asdict(self.rawboost_cfg)
+                )
+            else:
+                wav_np = ssi_additive_noise(wav.numpy(), self.sample_rate)
             wav = torch.from_numpy(wav_np)
         wav = truncate_or_pad(wav, self.segment_samples)
         return {"wav": wav, "label": entry.label, "meta": entry.meta}
@@ -221,6 +229,7 @@ class AudioDataModule(LightningDataModule):
         eval_extra_every_n_epochs: int = 1,
         eval_extra_max_trials: int | None = None,
         eval_max_trials: int | None = None,
+        rawboost_cfg: RawboostSSIConfig | None = None,
     ) -> None:
         super().__init__()
         self.train_protocol_path = train_protocol_path
@@ -239,6 +248,7 @@ class AudioDataModule(LightningDataModule):
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.eval_extra = eval_extra or []
+        self.rawboost_cfg = rawboost_cfg
         self._train_ds: AudioDataset | None = None
         self._eval_ds: AudioDataset | None = None
         self._eval_extra_ds: list[AudioDataset] = []
@@ -263,6 +273,7 @@ class AudioDataModule(LightningDataModule):
                 sample_rate=self.sample_rate,
                 segment_samples=self.segment_samples,
                 training=True,
+                rawboost_cfg=self.rawboost_cfg,
             )
         if stage in (None, "fit", "validate", "test"):
             self._eval_ds = AudioDataset(

@@ -240,6 +240,7 @@ def build_datamodule(cfg: RunConfig) -> AudioDataModule:
         eval_extra_every_n_epochs=getattr(cfg.train, "eval_extra_every_n_epochs", 1),
         eval_extra_max_trials=getattr(cfg.data, "eval_extra_max_trials", None),
         eval_max_trials=getattr(cfg.data, "eval_max_trials", None),
+        rawboost_cfg=getattr(cfg.data, "rawboost", None),
     )
 
 

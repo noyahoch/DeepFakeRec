@@ -13,10 +13,26 @@ import yaml
 @dataclass
 class ModelConfig:
     pretrained_name: str = "facebook/wav2vec2-xls-r-300m"
-    freeze_backbone: bool = False
+    freeze_backbone: bool = True
     num_layers: int = 24
     hidden_dim: int = 1024
     num_classes: int = 2
+
+
+@dataclass
+class RawboostSSIConfig:
+    """Optional overrides for SSI (algo 3) augmentation. Omitted keys use SLS defaults. Set data.rawboost in YAML to override."""
+    snr_min: int = 10
+    snr_max: int = 40
+    n_bands: int = 5
+    min_f: float = 20
+    max_f: float = 8000
+    min_bw: float = 100
+    max_bw: float = 1000
+    min_coeff: int = 10
+    max_coeff: int = 100
+    min_g: float = 0
+    max_g: float = 0
 
 
 @dataclass
@@ -27,6 +43,8 @@ class DataConfig:
     eval_audio_dir: str
     sample_rate: int = 16000
     segment_samples: int = 64600
+    # Optional SSI (RawBoost algo 3) overrides. When null, training uses SLS defaults.
+    rawboost: RawboostSSIConfig | None = None
     # Primary eval set limited to N examples (shuffled seed 42). Set null in YAML for full set.
     eval_max_trials: int | None = 1000
     eval_key_path: str | None = None
@@ -39,11 +57,11 @@ class DataConfig:
 
 @dataclass
 class TrainConfig:
-    batch_size: int = 14
+    batch_size: int = 5
     lr: float = 1e-6
     weight_decay: float = 1e-4
-    epochs: int = 100
-    early_stop_patience: int = 1
+    epochs: int = 50
+    early_stop_patience: int = 3
     # Monitor for early stopping: "val/eer" (recommended for generalization) or "train/loss" or "val/eer_LA2021".
     early_stop_monitor: str | None = "val/eer"
     # Monitor for best checkpoint: "val/eer" (default) or "val/eer_LA2021" to save best by LA 2021 EER.
@@ -73,7 +91,6 @@ class EvalConfig:
     metrics: list[str] = None
     save_scores_path: str | None = None
     batch_size: int = 32
-    save_scores_as_probability: bool = False
 
 
 @dataclass
@@ -122,12 +139,15 @@ def _apply_override(raw: dict[str, Any], override_path: str) -> dict[str, Any]:
 
 
 def _build_data_config(raw_data: dict[str, Any]) -> DataConfig:
-    """Build DataConfig from the 'data' section of the YAML."""
+    """Build DataConfig from the 'data' section of the YAML. Optional 'rawboost' overrides SSI (algo 3) params."""
     data_raw = dict(raw_data)
-    data_raw.pop("rawboost", None)
+    rawboost_overrides = data_raw.pop("rawboost", None)
     data_raw.pop("augment", None)
     data_raw.pop("force_librosa", None)
-    return DataConfig(**data_raw)
+    data = DataConfig(**data_raw)
+    if rawboost_overrides is not None:
+        data.rawboost = RawboostSSIConfig(**rawboost_overrides)
+    return data
 
 
 def load_config(path: str, override_path: str | None = None) -> RunConfig:
