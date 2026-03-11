@@ -1,3 +1,6 @@
+# API keys (never commit)
+api_keys/
+
 # Virtual Environment
 .venv/
 .vscode/

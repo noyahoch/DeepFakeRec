@@ -15,6 +15,7 @@ from typing import Any
 
 import numpy as np
 import torch
+import wandb
 from lightning import LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
@@ -247,6 +248,14 @@ def build_datamodule(cfg: RunConfig) -> AudioDataModule:
 # ---------------------------------------------------------------------------
 
 
+def _login_wandb_from_file(path: str) -> None:
+    """Read W&B API key from a file and log in (e.g. api_keys/yoni.txt)."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Wandb key file not found: {p}")
+    wandb.login(key=p.read_text().strip())
+
+
 def _run_path(base: str, run_name: str | None) -> Path:
     """Return base as Path, or base/run_name if run_name is not None."""
     path = Path(base)
@@ -260,7 +269,11 @@ def _run_path(base: str, run_name: str | None) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def train(cfg: RunConfig, run_name: str | None = None) -> None:
+def train(
+    cfg: RunConfig,
+    run_name: str | None = None,
+    wandb_key_path: str | None = None,
+) -> None:
     seed_everything(cfg.train.seed)
 
     run_dir = _run_path(cfg.logging.run_dir, run_name)
@@ -298,6 +311,8 @@ def train(cfg: RunConfig, run_name: str | None = None) -> None:
 
     if not cfg.logging.use_wandb:
         os.environ["WANDB_MODE"] = "disabled"
+    elif wandb_key_path is not None:
+        _login_wandb_from_file(wandb_key_path)
     logger = WandbLogger(
         project=cfg.logging.project,
         save_dir=str(run_dir),

@@ -97,3 +97,14 @@ data:
 ```
 
 If the structure or key format differs, update these paths and/or extend `parse_protocol()` in `src/dataset.py`.
+
+---
+
+## Eval metadata from trial metadata (LA_2021)
+
+For LA_2021, create `eval_metadata.txt` from the keys `trial_metadata.txt` by keeping only lines that end with `eval`:
+
+```bash
+cd <project_root>
+grep 'eval$' data/LA_2021/keys/LA/CM/trial_metadata.txt > data/LA_2021/keys/LA/CM/eval_metadata.txt
+```
