@@ -25,16 +25,23 @@ def main() -> None:
         metavar="YAML",
         help="Optional override config (inherits from --config, only set keys to override).",
     )
+    parser.add_argument(
+        "--unfreeze-backbone",
+        action="store_true",
+        help="Override model.freeze_backbone to False (so backbone trains). Without this, both runs use the same config → bit-identical results.",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config, override_path=args.override)
+    if args.unfreeze_backbone:
+        cfg.model.freeze_backbone = False
 
     if args.mode == "train":
         train(cfg, run_name=args.run_name)
     else:
         if not args.ckpt:
             raise SystemExit("--ckpt required for eval mode")
-        results = evaluate(cfg, args.ckpt)
+        results = evaluate(cfg, args.ckpt, run_name=args.run_name)
         for k, v in results.items():
             print(f"{k}: {v:.4f}")
 

@@ -1,0 +1,12 @@
+# Override for eval-only: run on full LA 2021 eval phase only and save scores. EER matches organisers' reported metric.
+# Usage: uv run python main.py --mode eval --ckpt checkpoints/.../best.ckpt --override run_configs/eval_la21_full.yaml
+data:
+  eval_protocol_path: "data/LA_2021/keys/LA/CM/trial_metadata.txt"
+  eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
+  eval_max_trials: null
+  eval_phase_filter: "eval"   # only load and run on eval-phase trials
+eval:
+  batch_size: 32
+  save_scores_path: "scores/scores_LA.txt"
+logging:
+  use_wandb: false

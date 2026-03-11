@@ -8,13 +8,12 @@ import numpy as np
 import torch
 import yaml
 
-from .new_rawboost import SSINoiseConfig
 
 
 @dataclass
 class ModelConfig:
     pretrained_name: str = "facebook/wav2vec2-xls-r-300m"
-    freeze_backbone: bool = True
+    freeze_backbone: bool = False
     num_layers: int = 24
     hidden_dim: int = 1024
     num_classes: int = 2
@@ -28,8 +27,14 @@ class DataConfig:
     eval_audio_dir: str
     sample_rate: int = 16000
     segment_samples: int = 64600
-    augment: bool = True
-    rawboost: SSINoiseConfig = field(default_factory=SSINoiseConfig)
+    # Primary eval set limited to N examples (shuffled seed 42). Set null in YAML for full set.
+    eval_max_trials: int | None = 1000
+    eval_key_path: str | None = None
+    eval_extra: list[dict[str, Any]] | None = None
+    eval_extra_max_trials: int | None = None
+    # EER on phase subset only (LA 2021: "eval" phase matches organisers' reported EER).
+    eval_phase_filter: str | None = "eval"
+    eval_phase_column: int = 7
 
 
 @dataclass
@@ -39,7 +44,13 @@ class TrainConfig:
     weight_decay: float = 1e-4
     epochs: int = 100
     early_stop_patience: int = 1
+    # Monitor for early stopping: "val/eer" (recommended for generalization) or "train/loss" or "val/eer_LA2021".
+    early_stop_monitor: str | None = "val/eer"
+    # Monitor for best checkpoint: "val/eer" (default) or "val/eer_LA2021" to save best by LA 2021 EER.
+    checkpoint_monitor: str | None = None
     val_every_n_epochs: int = 1
+    # Run evaluation on eval_extra (e.g. LA2021) every N epochs; 1 = every validation. Saves time when extra set is large.
+    eval_extra_every_n_epochs: int = 1
     seed: int = 1234
     num_workers: int = 8
     precision: str = "32-true"
@@ -53,6 +64,8 @@ class TrainConfig:
     log_train_eer: bool = (
         True  # if True, compute and log EER on training set each epoch
     )
+    # If set, save (file_id, score) from validation each epoch to this path (same scores as val EER; compare with standalone eval to verify pipeline).
+    save_val_scores_path: str | None = None
 
 
 @dataclass
@@ -60,6 +73,7 @@ class EvalConfig:
     metrics: list[str] = None
     save_scores_path: str | None = None
     batch_size: int = 32
+    save_scores_as_probability: bool = False
 
 
 @dataclass
@@ -108,13 +122,12 @@ def _apply_override(raw: dict[str, Any], override_path: str) -> dict[str, Any]:
 
 
 def _build_data_config(raw_data: dict[str, Any]) -> DataConfig:
-    """Build DataConfig from the 'data' section of the YAML, including nested rawboost."""
+    """Build DataConfig from the 'data' section of the YAML."""
     data_raw = dict(raw_data)
-    rawboost_overrides = data_raw.pop("rawboost", {})
-    data = DataConfig(**data_raw)
-    rawboost_overrides.setdefault("sample_rate", data.sample_rate)
-    data.rawboost = SSINoiseConfig(**rawboost_overrides)
-    return data
+    data_raw.pop("rawboost", None)
+    data_raw.pop("augment", None)
+    data_raw.pop("force_librosa", None)
+    return DataConfig(**data_raw)
 
 
 def load_config(path: str, override_path: str | None = None) -> RunConfig:
@@ -131,7 +144,9 @@ def load_config(path: str, override_path: str | None = None) -> RunConfig:
     model = ModelConfig(**raw.get("model", {}))
     data = _build_data_config(raw["data"])
     train = TrainConfig(**raw.get("train", {}))
-    eval_cfg = EvalConfig(**raw.get("eval", {}))
+    eval_raw = dict(raw.get("eval", {}))
+    eval_raw.pop("score_class_index", None)
+    eval_cfg = EvalConfig(**eval_raw)
     eval_cfg.metrics = _coalesce_metrics(eval_cfg.metrics)
     logging = LoggingConfig(**raw.get("logging", {}))
 
