@@ -6,54 +6,40 @@ model:
   num_classes: 2
 
 data:
-  train_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.train.trn.txt"
-  train_audio_dir: "data/LA_2019/ASVspoof2019_LA_train/flac"
-  eval_protocol_path: "data/LA_2019/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt"
-  eval_audio_dir: "data/LA_2019/ASVspoof2019_LA_eval/flac"
-  # eval_protocol_path: "data/LA_2021/keys/LA/CM/eval_metadata.txt"
-  # eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
-  sample_rate: 16000
-  segment_samples: 64600
-  augment: true
-  rawboost:
-    snr_min: 10
-    snr_max: 40
-    num_bands: 5
-    freq_lo: 20
-    freq_hi: 8000
-    bw_lo: 100
-    bw_hi: 1000
-    order_lo: 10
-    order_hi: 100
-    gain_lo: 0
-    gain_hi: 0
+  train_protocol_path: "data/LA_2019/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.train.trn.txt"
+  train_audio_dir: "data/LA_2019/LA/ASVspoof2019_LA_train/flac"
+  eval_protocol_path: "data/LA_2021/keys/LA/CM/trial_metadata.txt"
+  eval_audio_dir: "data/LA_2021/ASVspoof2021_LA_eval/flac"
 
 train:
-  batch_size: 5
+  batch_size: 5           # paper Section 4.2 specifies batch_size=5
   lr: 0.000001
-  weight_decay: 0.0001
-  epochs: 50
-  early_stop_patience: 3
-  val_every_n_epochs: 10
+  weight_decay: 0.0001  # try 0.001 or 0.005 if overfitting to 2019 / LA 2021 EER goes up
+  epochs: 50              # paper Section 4.2 specifies 50 epochs
+  early_stop_patience: 50
+  # Stop when val EER stops improving (recommended for 2021 generalization). Use "train/loss" to match ref exactly.
+  early_stop_monitor: "val/eer"
+  val_every_n_epochs: 1
   seed: 1234
-  num_workers: 4
-  precision: "16-mixed"
-  grad_clip: 1.0
+  num_workers: 8          # reference uses 8
+  precision: "32-true"    # reference trains in FP32
+  grad_clip: null         # reference has no gradient clipping
   loss_weights:
     - 0.1  # spoof (class 0)
     - 0.9  # bonafide (class 1)
   checkpoint_save_dir: "checkpoints"
-  checkpoint_path: null   # set to path/to/model.ckpt to resume or for eval_only
-  eval_only: false        # if true, only run evaluation (no training, no checkpoint saved)
-  log_train_eer: true     # if true, compute and log EER on training set each epoch
+  checkpoint_path: null
+  eval_only: false
+  log_train_eer: true
 
 eval:
   metrics: ["eer"]
   save_scores_path: null
-
+  batch_size: 32
+  
 logging:
   backend: "wandb"
   run_dir: "runs"
   project: "audio-deepfake"
   log_every_n_steps: 20
-  use_wandb: true        # if false, wandb logging is disabled (e.g. for debug runs)
+  use_wandb: true

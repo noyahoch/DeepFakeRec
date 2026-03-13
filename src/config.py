@@ -8,7 +8,6 @@ import numpy as np
 import torch
 import yaml
 
-from .new_rawboost import SSINoiseConfig
 
 
 @dataclass
@@ -21,6 +20,22 @@ class ModelConfig:
 
 
 @dataclass
+class RawboostSSIConfig:
+    """Optional overrides for SSI (algo 3) augmentation. Omitted keys use SLS defaults. Set data.rawboost in YAML to override."""
+    snr_min: int = 10
+    snr_max: int = 40
+    n_bands: int = 5
+    min_f: float = 20
+    max_f: float = 8000
+    min_bw: float = 100
+    max_bw: float = 1000
+    min_coeff: int = 10
+    max_coeff: int = 100
+    min_g: float = 0
+    max_g: float = 0
+
+
+@dataclass
 class DataConfig:
     train_protocol_path: str
     train_audio_dir: str
@@ -28,8 +43,16 @@ class DataConfig:
     eval_audio_dir: str
     sample_rate: int = 16000
     segment_samples: int = 64600
-    augment: bool = True
-    rawboost: SSINoiseConfig = field(default_factory=SSINoiseConfig)
+    # Optional SSI (RawBoost algo 3) overrides. When null, training uses SLS defaults.
+    rawboost: RawboostSSIConfig | None = None
+    # Primary eval set limited to N examples (shuffled seed 42). Set null in YAML for full set.
+    eval_max_trials: int | None = 1000
+    eval_key_path: str | None = None
+    eval_extra: list[dict[str, Any]] | None = None
+    eval_extra_max_trials: int | None = None
+    # EER on phase subset only (LA 2021: "eval" phase matches organisers' reported EER).
+    eval_phase_filter: str | None = "eval"
+    eval_phase_column: int = 7
 
 
 @dataclass
@@ -39,11 +62,17 @@ class TrainConfig:
     weight_decay: float = 1e-4
     epochs: int = 50
     early_stop_patience: int = 3
+    # Monitor for early stopping: "val/eer" (recommended for generalization) or "train/loss" or "val/eer_LA2021".
+    early_stop_monitor: str | None = "val/eer"
+    # Monitor for best checkpoint: "val/eer" (default) or "val/eer_LA2021" to save best by LA 2021 EER.
+    checkpoint_monitor: str | None = None
     val_every_n_epochs: int = 1
+    # Run evaluation on eval_extra (e.g. LA2021) every N epochs; 1 = every validation. Saves time when extra set is large.
+    eval_extra_every_n_epochs: int = 1
     seed: int = 1234
-    num_workers: int = 4
-    precision: str = "16-mixed"
-    grad_clip: float | None = 1.0
+    num_workers: int = 8
+    precision: str = "32-true"
+    grad_clip: float | None = None
     loss_weights: list[float] = field(default_factory=lambda: [0.1, 0.9])
     checkpoint_save_dir: str = "checkpoints"
     checkpoint_path: str | None = None  # path to .ckpt to resume or run eval-only
@@ -53,12 +82,15 @@ class TrainConfig:
     log_train_eer: bool = (
         True  # if True, compute and log EER on training set each epoch
     )
+    # If set, save (file_id, score) from validation each epoch to this path (same scores as val EER; compare with standalone eval to verify pipeline).
+    save_val_scores_path: str | None = None
 
 
 @dataclass
 class EvalConfig:
     metrics: list[str] = None
     save_scores_path: str | None = None
+    batch_size: int = 32
 
 
 @dataclass
@@ -107,12 +139,14 @@ def _apply_override(raw: dict[str, Any], override_path: str) -> dict[str, Any]:
 
 
 def _build_data_config(raw_data: dict[str, Any]) -> DataConfig:
-    """Build DataConfig from the 'data' section of the YAML, including nested rawboost."""
+    """Build DataConfig from the 'data' section of the YAML. Optional 'rawboost' overrides SSI (algo 3) params."""
     data_raw = dict(raw_data)
-    rawboost_overrides = data_raw.pop("rawboost", {})
+    rawboost_overrides = data_raw.pop("rawboost", None)
+    data_raw.pop("augment", None)
+    data_raw.pop("force_librosa", None)
     data = DataConfig(**data_raw)
-    rawboost_overrides.setdefault("sample_rate", data.sample_rate)
-    data.rawboost = SSINoiseConfig(**rawboost_overrides)
+    if rawboost_overrides is not None:
+        data.rawboost = RawboostSSIConfig(**rawboost_overrides)
     return data
 
 
@@ -130,7 +164,9 @@ def load_config(path: str, override_path: str | None = None) -> RunConfig:
     model = ModelConfig(**raw.get("model", {}))
     data = _build_data_config(raw["data"])
     train = TrainConfig(**raw.get("train", {}))
-    eval_cfg = EvalConfig(**raw.get("eval", {}))
+    eval_raw = dict(raw.get("eval", {}))
+    eval_raw.pop("score_class_index", None)
+    eval_cfg = EvalConfig(**eval_raw)
     eval_cfg.metrics = _coalesce_metrics(eval_cfg.metrics)
     logging = LoggingConfig(**raw.get("logging", {}))
 
@@ -140,6 +176,9 @@ def load_config(path: str, override_path: str | None = None) -> RunConfig:
 
 
 def seed_everything(seed: int) -> None:
+    import random
+
+    random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)

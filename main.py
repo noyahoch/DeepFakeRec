@@ -9,9 +9,7 @@ from src.train import train
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config", default="run_configs/config.yaml", help="Path to config YAML"
-    )
+    parser.add_argument("--config", default="run_configs/config.yaml", help="Path to config YAML")
     parser.add_argument("--mode", choices=["train", "eval"], default="train")
     parser.add_argument("--ckpt", type=str, default=None)
     parser.add_argument(
@@ -28,22 +26,29 @@ def main() -> None:
         help="Optional override config (inherits from --config, only set keys to override).",
     )
     parser.add_argument(
+        "--unfreeze-backbone",
+        action="store_true",
+        help="Override model.freeze_backbone to False (so backbone trains). Without this, both runs use the same config → bit-identical results.",
+    )
+    parser.add_argument(
         "--wandb-key",
+        dest="wandb_key",
         type=str,
         default=None,
-        metavar="PATH",
-        help="Path to file containing W&B API key (e.g. api_keys/yoni.txt).",
+        help="Path to file containing wandb API key for login.",
     )
     args = parser.parse_args()
 
     cfg = load_config(args.config, override_path=args.override)
+    if args.unfreeze_backbone:
+        cfg.model.freeze_backbone = False
 
     if args.mode == "train":
         train(cfg, run_name=args.run_name, wandb_key_path=args.wandb_key)
     else:
         if not args.ckpt:
             raise SystemExit("--ckpt required for eval mode")
-        results = evaluate(cfg, args.ckpt)
+        results = evaluate(cfg, args.ckpt, run_name=args.run_name)
         for k, v in results.items():
             print(f"{k}: {v:.4f}")
 
