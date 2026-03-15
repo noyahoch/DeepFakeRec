@@ -34,6 +34,11 @@ class ProtocolEntry:
     meta: dict[str, Any]
 
 
+def _protocol_audio_path(file_id: str) -> str:
+    """Keep an explicit filename extension; otherwise default to .flac."""
+    return file_id if Path(file_id).suffix else f"{file_id}.flac"
+
+
 def parse_protocol(
     path: str,
     key_file_path: str | None = None,
@@ -85,7 +90,7 @@ def parse_protocol(
             label, key = key_by_id[file_id]
             entries.append(
                 ProtocolEntry(
-                    audio_path=f"{file_id}.flac",
+                    audio_path=_protocol_audio_path(file_id),
                     label=label,
                     meta={"speaker_id": "", "file_id": file_id, "key": key},
                 )
@@ -112,7 +117,7 @@ def parse_protocol(
         label = 1 if key.lower() == "bonafide" else 0
         entries.append(
             ProtocolEntry(
-                audio_path=f"{file_id}.flac",
+                audio_path=_protocol_audio_path(file_id),
                 label=label,
                 meta={"speaker_id": speaker_id, "file_id": file_id, "key": key},
             )

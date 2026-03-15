@@ -84,6 +84,14 @@ If you have the 2021 DF dataset and protocol:
 - Run the same eval command with:  
   `--override path/to/df2021_override.yaml`
 
+## 8. Eval on In-The-Wild
+
+Prepare the dataset as described in `DATA_SETUP.md`, then run:
+
+```bash
+uv run python main.py --config run_configs/config.yaml --mode eval --ckpt checkpoints/<best.ckpt> --override run_configs/eval_in_the_wild.yaml
+```
+
 ---
 
 ---

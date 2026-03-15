@@ -108,3 +108,67 @@ For LA_2021, create `eval_metadata.txt` from the keys `trial_metadata.txt` by ke
 cd <project_root>
 grep 'eval$' data/LA_2021/keys/LA/CM/trial_metadata.txt > data/LA_2021/keys/LA/CM/eval_metadata.txt
 ```
+
+---
+
+## In-The-Wild — download and prepare in `data/in_the_wild/`
+
+This repo expects an ASVspoof-style protocol file, so for In-The-Wild you need one extra preparation step after download.
+
+### 1. Create the target folder
+
+```bash
+cd <project_root>
+mkdir -p data/in_the_wild
+```
+
+### 2. Download the dataset archive
+
+Official release page:
+
+- https://huggingface.co/datasets/mueller91/In-The-Wild
+
+Download the archive `release_in_the_wild.zip` into `data/in_the_wild/`.
+
+If you prefer the browser, save it as:
+
+- `data/in_the_wild/release_in_the_wild.zip`
+
+### 3. Extract the archive
+
+```bash
+cd <project_root>/data/in_the_wild
+unzip release_in_the_wild.zip
+cd ../..
+```
+
+After extraction you should have a folder like:
+
+- `data/in_the_wild/release_in_the_wild/`
+
+Inside it you should see the audio files plus the metadata CSV shipped with the dataset, usually:
+
+- `data/in_the_wild/release_in_the_wild/meta.csv`
+
+### 4. Convert the metadata CSV into this repo's protocol format
+
+```bash
+cd <project_root>
+uv run python scripts/prepare_in_the_wild_protocol.py \
+  --metadata data/in_the_wild/release_in_the_wild/meta.csv \
+  --output data/in_the_wild/protocol.txt
+```
+
+That generates:
+
+- `data/in_the_wild/protocol.txt`
+
+### 5. Run evaluation with the override config
+
+```bash
+uv run python main.py \
+  --config run_configs/config.yaml \
+  --mode eval \
+  --ckpt checkpoints/<your-best-checkpoint>.ckpt \
+  --override run_configs/eval_in_the_wild.yaml
+```
