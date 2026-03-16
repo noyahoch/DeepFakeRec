@@ -17,6 +17,7 @@ class ModelConfig:
     num_layers: int = 24
     hidden_dim: int = 1024
     num_classes: int = 2
+    layer_aggregation: str = "sigmoid"
 
 
 @dataclass
@@ -43,6 +44,7 @@ class DataConfig:
     eval_audio_dir: str
     sample_rate: int = 16000
     segment_samples: int = 64600
+    use_rawboost: bool = True
     # Optional SSI (RawBoost algo 3) overrides. When null, training uses SLS defaults.
     rawboost: RawboostSSIConfig | None = None
     # Primary eval set limited to N examples (shuffled seed 42). Set null in YAML for full set.

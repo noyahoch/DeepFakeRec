@@ -62,16 +62,35 @@ class SlsClassifier(nn.Module):
         num_layers: int = 24,
         hidden_dim: int = 1024,
         num_classes: int = 2,
+        layer_aggregation: str = "sigmoid",
     ):
         super().__init__()
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
+        if layer_aggregation not in {"sigmoid", "softmax", "sum"}:
+            raise ValueError(
+                "layer_aggregation must be one of {'sigmoid', 'softmax', 'sum'}"
+            )
+        self.layer_aggregation = layer_aggregation
         self.weight_fc = nn.Linear(hidden_dim, 1, bias=True)
         self.first_bn = nn.BatchNorm2d(num_features=1)
         self.selu = nn.SELU(inplace=True)
         self.fc1 = nn.Linear(_FLAT_DIM_AFTER_POOL, 1024)
         self.fc3 = nn.Linear(1024, num_classes)
         self.logsoftmax = nn.LogSoftmax(dim=1)
+
+    def _aggregate_layers(self, H: torch.Tensor) -> torch.Tensor:
+        H_avg = H.mean(dim=2, keepdim=True)
+        H_fc = self.weight_fc(H_avg.reshape(H.shape[0] * H.shape[1], H.shape[3])).view(
+            H.shape[0], H.shape[1], 1, 1
+        )
+        if self.layer_aggregation == "sigmoid":
+            alpha = torch.sigmoid(H_fc)
+            return (alpha * H).sum(dim=0)
+        if self.layer_aggregation == "softmax":
+            alpha = torch.softmax(H_fc, dim=0)
+            return (alpha * H).sum(dim=0)
+        return H.sum(dim=0)
 
     def forward(self, H: torch.Tensor) -> torch.Tensor:
         _assert_rank(H, 4, "H")
@@ -80,10 +99,7 @@ class SlsClassifier(nn.Module):
             raise AssertionError(f"Expected {self.num_layers} layers, got {L}")
         if C != self.hidden_dim:
             raise AssertionError(f"Expected hidden_dim {self.hidden_dim}, got {C}")
-        H_avg = H.mean(dim=2, keepdim=True)
-        H_fc = self.weight_fc(H_avg.reshape(L * B, C)).view(L, B, 1, 1)
-        alpha = torch.sigmoid(H_fc)
-        H_weighted = (alpha *   H).sum(dim=0)
+        H_weighted = self._aggregate_layers(H)
         x = H_weighted.unsqueeze(1)
         x = self.first_bn(x)
         x = self.selu(x)

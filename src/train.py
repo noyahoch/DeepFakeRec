@@ -220,6 +220,7 @@ def build_model(cfg: RunConfig) -> DeepfakeDetector:
         num_layers=cfg.model.num_layers,
         hidden_dim=cfg.model.hidden_dim,
         num_classes=cfg.model.num_classes,
+        layer_aggregation=cfg.model.layer_aggregation,
     )
     return DeepfakeDetector(backbone=backbone, classifier=classifier)
 
@@ -240,6 +241,7 @@ def build_datamodule(cfg: RunConfig) -> AudioDataModule:
         eval_extra_every_n_epochs=getattr(cfg.train, "eval_extra_every_n_epochs", 1),
         eval_extra_max_trials=getattr(cfg.data, "eval_extra_max_trials", None),
         eval_max_trials=getattr(cfg.data, "eval_max_trials", None),
+        use_rawboost=getattr(cfg.data, "use_rawboost", True),
         rawboost_cfg=getattr(cfg.data, "rawboost", None),
     )
 
