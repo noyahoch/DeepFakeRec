@@ -12,6 +12,7 @@ data:
   eval_audio_dir: "/home/yonathanb/courses/audio/final_project/yoni/DeepFakeRec/data/in_the_wild/release_in_the_wild"
   eval_max_trials: null
   eval_phase_filter: null
+  use_rawboost: false
 
 eval:
   save_scores_path: "scores/scores_Wild.txt"
