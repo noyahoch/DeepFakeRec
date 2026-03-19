@@ -34,6 +34,11 @@ class ProtocolEntry:
     meta: dict[str, Any]
 
 
+def _protocol_audio_path(file_id: str) -> str:
+    """Keep an explicit filename extension; otherwise default to .flac."""
+    return file_id if Path(file_id).suffix else f"{file_id}.flac"
+
+
 def parse_protocol(
     path: str,
     key_file_path: str | None = None,
@@ -85,7 +90,7 @@ def parse_protocol(
             label, key = key_by_id[file_id]
             entries.append(
                 ProtocolEntry(
-                    audio_path=f"{file_id}.flac",
+                    audio_path=_protocol_audio_path(file_id),
                     label=label,
                     meta={"speaker_id": "", "file_id": file_id, "key": key},
                 )
@@ -112,7 +117,7 @@ def parse_protocol(
         label = 1 if key.lower() == "bonafide" else 0
         entries.append(
             ProtocolEntry(
-                audio_path=f"{file_id}.flac",
+                audio_path=_protocol_audio_path(file_id),
                 label=label,
                 meta={"speaker_id": speaker_id, "file_id": file_id, "key": key},
             )
@@ -173,6 +178,7 @@ class AudioDataset(Dataset[AudioSample]):
         max_trials: int | None = None,
         protocol_key_path: str | None = None,
         phase_filter: tuple[int, str] | None = None,
+        use_rawboost: bool = True,
         rawboost_cfg: RawboostSSIConfig | None = None,
     ) -> None:
         protocol = parse_protocol(
@@ -191,6 +197,7 @@ class AudioDataset(Dataset[AudioSample]):
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.training = training
+        self.use_rawboost = use_rawboost
         self.rawboost_cfg = rawboost_cfg
 
     def __len__(self) -> int:
@@ -200,7 +207,7 @@ class AudioDataset(Dataset[AudioSample]):
         entry = self.protocol[idx]
         full_path = os.path.join(self.audio_dir, entry.audio_path)
         wav = load_audio(full_path, self.sample_rate)
-        if self.training:
+        if self.training and self.use_rawboost:
             if self.rawboost_cfg is not None:
                 wav_np = ssi_additive_noise(
                     wav.numpy(), self.sample_rate, **asdict(self.rawboost_cfg)
@@ -229,6 +236,7 @@ class AudioDataModule(LightningDataModule):
         eval_extra_every_n_epochs: int = 1,
         eval_extra_max_trials: int | None = None,
         eval_max_trials: int | None = None,
+        use_rawboost: bool = True,
         rawboost_cfg: RawboostSSIConfig | None = None,
     ) -> None:
         super().__init__()
@@ -248,6 +256,7 @@ class AudioDataModule(LightningDataModule):
         self.sample_rate = sample_rate
         self.segment_samples = segment_samples
         self.eval_extra = eval_extra or []
+        self.use_rawboost = use_rawboost
         self.rawboost_cfg = rawboost_cfg
         self._train_ds: AudioDataset | None = None
         self._eval_ds: AudioDataset | None = None
@@ -273,6 +282,7 @@ class AudioDataModule(LightningDataModule):
                 sample_rate=self.sample_rate,
                 segment_samples=self.segment_samples,
                 training=True,
+                use_rawboost=self.use_rawboost,
                 rawboost_cfg=self.rawboost_cfg,
             )
         if stage in (None, "fit", "validate", "test"):

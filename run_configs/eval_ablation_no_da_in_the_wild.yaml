@@ -1,0 +1,21 @@
+# Override config for standalone evaluation on the In-The-Wild dataset.
+# Usage:
+#   uv run python scripts/prepare_in_the_wild_protocol.py \
+#     --metadata data/in_the_wild/release_in_the_wild/meta.csv \
+#     --output data/in_the_wild/protocol.txt
+#   uv run python main.py --config run_configs/config.yaml --mode eval \
+#     --ckpt checkpoints/.../best.ckpt \
+#     --override run_configs/eval_in_the_wild.yaml
+
+data:
+  eval_protocol_path: "/home/yonathanb/courses/audio/final_project/yoni/DeepFakeRec/data/in_the_wild/protocol.txt"
+  eval_audio_dir: "/home/yonathanb/courses/audio/final_project/yoni/DeepFakeRec/data/in_the_wild/release_in_the_wild"
+  eval_max_trials: null
+  eval_phase_filter: null
+  use_rawboost: false
+
+eval:
+  save_scores_path: "scores/scores_Wild.txt"
+
+logging:
+  use_wandb: false

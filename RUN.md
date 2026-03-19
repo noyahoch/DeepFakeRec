@@ -84,6 +84,40 @@ If you have the 2021 DF dataset and protocol:
 - Run the same eval command with:  
   `--override path/to/df2021_override.yaml`
 
+## 8. Eval on In-The-Wild
+
+Prepare the dataset as described in `DATA_SETUP.md`, then run:
+
+```bash
+uv run python main.py --config run_configs/config.yaml --mode eval --ckpt checkpoints/<best.ckpt> --override run_configs/eval_in_the_wild.yaml
+```
+
+---
+
+## 9. Paper ablations
+
+The base config in `run_configs/config.yaml` is the paper-style baseline:
+
+- `model.layer_aggregation: sigmoid`
+- `model.freeze_backbone: false`
+- `data.use_rawboost: true`
+
+Run ablations by keeping the base config and applying one override:
+
+```bash
+uv run python main.py --config run_configs/config.yaml --mode train --run-name ablation_softmax --override run_configs/ablation_softmax.yaml
+uv run python main.py --config run_configs/config.yaml --mode train --run-name ablation_sum --override run_configs/ablation_sum.yaml
+uv run python main.py --config run_configs/config.yaml --mode train --run-name ablation_no_finetune --override run_configs/ablation_no_finetune.yaml
+uv run python main.py --config run_configs/config.yaml --mode train --run-name ablation_no_da --override run_configs/ablation_no_da.yaml
+```
+
+Meaning of each override:
+
+- `ablation_softmax.yaml`: replace sigmoid layer weighting with softmax layer weighting
+- `ablation_sum.yaml`: remove learned layer weighting and sum all layer features directly
+- `ablation_no_finetune.yaml`: freeze the XLS-R backbone
+- `ablation_no_da.yaml`: disable RawBoost augmentation during training
+
 ---
 
 ---

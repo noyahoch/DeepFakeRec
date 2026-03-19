@@ -1,0 +1,5 @@
+model:
+  layer_aggregation: "softmax"
+
+data:
+  eval_max_trials: null

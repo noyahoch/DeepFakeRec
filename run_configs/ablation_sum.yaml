@@ -1,0 +1,2 @@
+model:
+  layer_aggregation: "sum"
