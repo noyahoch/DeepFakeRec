@@ -21,7 +21,7 @@ Dataset layout details are in `DATA_SETUP.md`.
 ## Train
 
 ```bash
-python main.py --config run_configs/config.yaml --mode train --run-name my_run
+python main.py --config run_configs/run_on_samples_config.yaml --mode train --run-name my_run
 ```
 
 Checkpoints are saved in `checkpoints/`.
@@ -29,10 +29,10 @@ Checkpoints are saved in `checkpoints/`.
 ## Eval
 
 ```bash
-python main.py --config run_configs/config.yaml --mode eval --ckpt checkpoints/<best.ckpt>
+python main.py --config run_configs/run_on_samples_config.yaml --mode eval --ckpt checkpoints/<best.ckpt>
 ```
 
 ## Notes
 
-- If your data or model paths are different, edit `run_configs/config.yaml` or use `--override path/to/override.yaml`.
+- If your data or model paths are different, edit `run_configs/run_on_samples_config.yaml` or use `--override path/to/override.yaml`.
 - If you do not want Weights & Biases logging, set `logging.use_wandb: false` in the config.
