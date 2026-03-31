@@ -22,8 +22,8 @@ For this sample config, the XLS-R backbone is not set explicitly in the YAML, so
 Use the sample config for a quick test:
 
 ```bash
-python main.py --config run_configs/run_on_samples_config.yaml --mode train --run-name sample_run
-python main.py --config run_configs/run_on_samples_config.yaml --mode eval --ckpt checkpoints/<best.ckpt>
+python main.py --config run_configs/run_on_samples_config.yaml --mode train --run-name sample_run --no-cuda
+python main.py --config run_configs/run_on_samples_config.yaml --mode eval --ckpt checkpoints/<best.ckpt> --no-cuda
 ```
 
 Checkpoints are saved in `checkpoints/`.
