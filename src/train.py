@@ -57,7 +57,9 @@ class DeepfakeLitModule(LightningModule):
         self.eval_phase_filter = eval_phase_filter
         self.eval_phase_column = eval_phase_column
         self.eval_protocol_path = eval_protocol_path
-        self.eval_protocol_paths = eval_protocol_paths  # one per val dataloader (primary + extras)
+        self.eval_protocol_paths = (
+            eval_protocol_paths  # one per val dataloader (primary + extras)
+        )
         self.save_hyperparameters(ignore=["model"])
 
         # Weighted CE – paper uses [0.1, 0.9]
@@ -182,8 +184,14 @@ class DeepfakeLitModule(LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         for dl_idx in sorted(self._val_outputs_by_dl.keys()):
-            name = self.eval_names[dl_idx] if dl_idx < len(self.eval_names) else f"eval_{dl_idx}"
-            metric_key = "val/eer" if dl_idx == 0 and name == "eval" else f"val/eer_{name}"
+            name = (
+                self.eval_names[dl_idx]
+                if dl_idx < len(self.eval_names)
+                else f"eval_{dl_idx}"
+            )
+            metric_key = (
+                "val/eer" if dl_idx == 0 and name == "eval" else f"val/eer_{name}"
+            )
             save_path = None
             if dl_idx == 0 and self.save_val_scores_path:
                 save_path = self.save_val_scores_path

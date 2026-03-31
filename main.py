@@ -1,17 +1,21 @@
 """Entry point — run with:  uv run python main.py [--config run_configs/config.yaml] [--mode train|eval] [--ckpt path]"""
 
 import argparse
-
-from src.config import load_config
-from src.eval import evaluate
-from src.train import train
+import os
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="run_configs/config.yaml", help="Path to config YAML")
+    parser.add_argument(
+        "--config", default="run_configs/config.yaml", help="Path to config YAML"
+    )
     parser.add_argument("--mode", choices=["train", "eval"], default="train")
     parser.add_argument("--ckpt", type=str, default=None)
+    parser.add_argument(
+        "--no-cuda",
+        action="store_true",
+        help="Disable CUDA (force CPU-only mode).",
+    )
     parser.add_argument(
         "--run-name",
         type=str,
@@ -38,6 +42,13 @@ def main() -> None:
         help="Path to file containing wandb API key for login.",
     )
     args = parser.parse_args()
+
+    if args.no_cuda:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+    from src.config import load_config
+    from src.eval import evaluate
+    from src.train import train
 
     cfg = load_config(args.config, override_path=args.override)
     if args.unfreeze_backbone:
